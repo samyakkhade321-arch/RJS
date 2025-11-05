@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Morse Code Encoder/Decoder</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+        }
+        .section {
+            background: white;
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        textarea {
+            width: 100%;
+            height: 100px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+            font-family: monospace;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        #output {
+            margin-top: 10px;
+            padding: 10px;
+            background: #ecf0f1;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            min-height: 50px;
+        }
+        .note {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Morse Code Encoder/Decoder</h1>
+    
+    <div class="section">
+        <h2>Text to Morse Code</h2>
+        <label for="textInput">Enter text (letters, numbers, spaces):</label>
+        <textarea id="textInput" placeholder="Type your message here..."></textarea>
+        <button onclick="encodeToMorse()">Encode to Morse</button>
+        <div id="morseOutput" class="note">Morse code will appear here. Use spaces between letters, / between words.</div>
+    </div>
+    
+    <div class="section">
+        <h2>Morse Code to Text</h2>
+        <label for="morseInput">Enter Morse code (use . for dot, - for dash, spaces between letters, / between words):</label>
+        <textarea id="morseInput" placeholder=".- -... -.-. / -.. --- / .-- --- .-. .-.. -.."></textarea>
+        <button onclick="decodeFromMorse()">Decode to Text</button>
+        <div id="textOutput" class="note">Decoded text will appear here.</div>
+    </div>
+
+    <script>
+        // Morse code dictionary (A-Z, 0-9, space)
+        const morseCode = {
+            'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.',
+            'F': '..-.', 'G': '--.', 'H': '....', 'I': '..', 'J': '.---',
+            'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---',
+            'P': '.--.', 'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-',
+            'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-', 'Y': '-.--',
+            'Z': '--..',
+            '0': '-----', '1': '.----', '2': '..---', '3': '...--',
+            '4': '....-', '5': '.....', '6': '-....', '7': '--...',
+            '8': '---..', '9': '----.',
+            ' ': '/'
+        };
+
+        // Reverse dictionary for decoding
+        const reverseMorse = {};
+        for (let key in morseCode) {
+            reverseMorse[morseCode[key]] = key;
+        }
+
+        function encodeToMorse() {
+            const input = document.getElementById('textInput').value.toUpperCase().trim();
+            if (!input) {
+                document.getElementById('morseOutput').textContent = 'Please enter some text!';
+                return;
+            }
+
+            let morse = '';
+            for (let i = 0; i < input.length; i++) {
+                const char = input[i];
+                if (morseCode[char]) {
+                    if (morse !== '') {
+                        if (char === ' ') {
+                            morse += ' / ';
+                        } else {
+                            morse += ' ';
+                        }
+                    }
+                    morse += morseCode[char];
+                } else {
+                    // Skip unsupported chars
+                    if (morse !== '' && char !== ' ') morse += ' ';
+                }
+            }
+            document.getElementById('morseOutput').textContent = morse || 'No valid characters found.';
+        }
+
+        function decodeFromMorse() {
+            const input = document.getElementById('morseInput').value.trim();
+            if (!input) {
+                document.getElementById('textOutput').textContent = 'Please enter some Morse code!';
+                return;
+            }
+
+            // Split into words by /
+            const words = input.split('/');
+            let decoded = '';
+            for (let word of words) {
+                // Split word into letters by space
+                const letters = word.trim().split(/\s+/);
+                for (let letter of letters) {
+                    if (reverseMorse[letter]) {
+                        decoded += reverseMorse[letter];
+                    }
+                }
+                decoded += ' ';
+            }
+            document.getElementById('textOutput').textContent = decoded.trim() || 'No valid Morse found.';
+        }
+    </script>
+</body>
+</html>!
