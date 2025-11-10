@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Morse Code Sound Trainer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fc;
+        }
+        .container-card {
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+        .btn-primary {
+            background-image: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%);
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+        .btn-practice {
+            background-image: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
+        }
+        .status-box {
+            min-height: 4rem;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8 min-h-screen flex items-start justify-center">
+
+<div id="app" class="w-full max-w-2xl">
+    <header class="text-center mb-8">
+        <h1 class="text-4xl font-extrabold text-gray-800 mb-2">📻 Morse Code Sound Lab</h1>
+        <p class="text-gray-600">Type text to hear it, or use the practice mode to train your ear.</p>
+    </header>
+
+    <!-- Global Message/Modal Box -->
+    <div id="message-box" class="fixed inset-0 z-50 hidden items-center justify-center bg-gray-900 bg-opacity-50">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full transform transition-all duration-300 scale-95 opacity-0" id="message-content">
+            <h3 class="text-xl font-bold mb-3 text-red-600" id="message-title"></h3>
+            <p class="text-gray-700 mb-4" id="message-text"></p>
+            <button onclick="closeMessage()" class="w-full py-2 rounded-lg text-white font-semibold btn-primary">Got It</button>
+        </div>
+    </div>
+    
+    <!-- Main Input Card -->
+    <div class="container-card bg-white p-6 rounded-xl mb-8">
+        <h2 class="text-2xl font-bold text-gray-700 mb-4 border-b pb-2">Text-to-Morse Translator</h2>
+        
+        <textarea id="inputText" rows="4" 
+            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800"
+            placeholder="Type your message here (A-Z, 0-9)..."></textarea>
+        
+        <div class="mt-4 flex flex-col md:flex-row gap-4">
+            <button onclick="translateAndPlay()" id="playButton" 
+                class="flex-1 py-3 rounded-lg text-white font-semibold btn-primary transition duration-150 ease-in-out">
+                Play Morse Code
+            </button>
+            <button onclick="stopPlayback()" id="stopButton" disabled
+                class="flex-1 py-3 rounded-lg text-white font-semibold bg-red-500 hover:bg-red-600 transition duration-150 ease-in-out disabled:opacity-50">
+                Stop
+            </button>
+        </div>
+
+        <div class="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+            <p class="text-sm font-medium text-gray-600">Morse Output:</p>
+            <div id="morseOutput" class="text-xl font-mono break-all mt-1 min-h-[1.5rem] text-gray-900"></div>
+        </div>
+    </div>
+
+    <!-- Practice Card -->
+    <div class="container-card bg-white p-6 rounded-xl">
+        <h2 class="text-2xl font-bold text-gray-700 mb-4 border-b pb-2">Ear Training Practice</h2>
+        
+        <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <button onclick="startPractice()" id="startPracticeButton" 
+                class="w-full sm:w-auto px-6 py-3 rounded-lg text-white font-semibold btn-practice transition duration-150 ease-in-out">
+                Start Next Character
+            </button>
+            <div id="practiceStatus" class="status-box flex-1 text-center bg-yellow-50 p-3 rounded-lg border border-yellow-200 text-yellow-800 text-lg font-medium">
+                Click 'Start Next Character' to begin.
+            </div>
+        </div>
+
+        <div class="mt-4 space-y-3">
+            <label for="practiceInput" class="block text-sm font-medium text-gray-700">Your Guess:</label>
+            <input type="text" id="practiceInput" maxlength="1" disabled
+                class="w-full p-3 border border-gray-300 rounded-lg text-2xl text-center uppercase focus:ring-2 focus:ring-green-500 focus:border-green-500 disabled:bg-gray-100"
+                onkeypress="if(event.key === 'Enter') checkGuess()">
+            
+            <button onclick="checkGuess()" id="checkButton" disabled
+                class="w-full py-3 rounded-lg text-white font-semibold bg-green-600 hover:bg-green-700 transition duration-150 ease-in-out disabled:opacity-50">
+                Check Answer (Enter)
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- Configuration Constants ---
+    const DOT_DURATION = 120; // Time unit in milliseconds
+    const FREQUENCY = 700;   // Hz
+    const MORSE_MAP = {
+        'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.', 'G': '--.', 'H': '....', 'I': '..', 'J': '.---',
+        'K': '-.-', 'L': '.-..', 'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.', 'S': '...', 'T': '-',
+        'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-', 'Y': '-.--', 'Z': '--..',
+        '1': '.----', '2': '..---', '3': '...--', '4': '....-', '5': '.....',
+        '6': '-....', '7': '--...', '8': '---..', '9': '----.', '0': '-----',
+        ' ': '/' // Space between words
+    };
+
+    // --- Global State ---
+    let audioContext;
+    let isPlaying = false;
+    let currentPracticeChar = null;
+    let stopSignal = false; // Used to forcibly stop playback sequence
+
+    // --- Message/Modal Handlers ---
+    function showMessage(title, text, isError = false) {
+        const modal = document.getElementById('message-box');
+        const content = document.getElementById('message-content');
+        document.getElementById('message-title').textContent = title;
+        document.getElementById('message-text').textContent = text;
+        content.querySelector('button').className = isError 
+            ? 'w-full py-2 rounded-lg text-white font-semibold bg-red-600 hover:bg-red-700' 
+            : 'w-full py-2 rounded-lg text-white font-semibold btn-primary';
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        setTimeout(() => {
+            content.classList.remove('scale-95', 'opacity-0');
+            content.classList.add('scale-100', 'opacity-100');
+        }, 10);
+    }
+
+    function closeMessage() {
+        const modal = document.getElementById('message-box');
+        const content = document.getElementById('message-content');
+        content.classList.remove('scale-100', 'opacity-100');
+        content.classList.add('scale-95', 'opacity-0');
+        setTimeout(() => {
+            modal.classList.remove('flex');
+            modal.classList.add('hidden');
+        }, 300);
+    }
+
+
+    // --- Audio Generation Logic ---
+
+    // Initializes AudioContext lazily on user interaction
+    function initAudio() {
+        if (!audioContext) {
+            try {
+                // For cross-browser compatibility
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            } catch (e) {
+                showMessage("Audio Error", "The Web Audio API is not supported in this browser, or could not be started.", true);
+                return null;
+            }
+        }
+        return audioContext;
+    }
+
+    // Generates a single tone (dot or dash)
+    function generateTone(duration) {
+        return new Promise(resolve => {
+            if (stopSignal) {
+                return resolve();
+            }
+
+            const ctx = initAudio();
+            if (!ctx) return resolve();
+
+            const oscillator = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(ctx.destination);
+
+            oscillator.frequency.setValueAtTime(FREQUENCY, ctx.currentTime);
+            gainNode.gain.setValueAtTime(0.0, ctx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.01); // Quick attack
+
+            oscillator.start();
+
+            // Quick release
+            gainNode.gain.setValueAtTime(0.5, ctx.currentTime + (duration / 1000) - 0.01);
+            gainNode.gain.linearRampToValueAtTime(0.0, ctx.currentTime + (duration / 1000));
+
+            // Stop the oscillator after the duration
+            setTimeout(() => {
+                oscillator.stop();
+                resolve();
+            }, duration);
+        });
+    }
+
+    // Handles the timing for silence
+    function generateSilence(duration) {
+        return new Promise(resolve => {
+            if (stopSignal) {
+                return resolve();
+            }
+            setTimeout(resolve, duration);
+        });
+    }
+
+    // Main function to convert text and play Morse code
+    async function playMorse(text, updateOutput = true) {
+        if (isPlaying) {
+            showMessage("Playback Busy", "Please wait for the current message to finish or click 'Stop'.");
+            return;
+        }
+
+        const ctx = initAudio();
+        if (!ctx) return;
+
+        isPlaying = true;
+        stopSignal = false;
+        document.getElementById('playButton').disabled = true;
+        document.getElementById('stopButton').disabled = false;
+        
+        if (updateOutput) {
+            document.getElementById('morseOutput').innerHTML = '';
+        }
+        
+        const normalizedText = text.toUpperCase().replace(/[^A-Z0-9 ]/g, '');
+        const characters = normalizedText.split('');
+        let fullMorse = '';
+
+        for (const char of characters) {
+            if (stopSignal) break;
+
+            const code = MORSE_MAP[char];
+            if (!code) continue;
+
+            if (char === ' ') {
+                fullMorse += '/';
+                if (updateOutput) document.getElementById('morseOutput').textContent = fullMorse;
+                await generateSilence(DOT_DURATION * 7); // Word space (7 units)
+                continue;
+            }
+
+            fullMorse += code;
+            if (updateOutput) document.getElementById('morseOutput').textContent = fullMorse;
+
+            for (let i = 0; i < code.length; i++) {
+                if (stopSignal) break;
+
+                const element = code[i];
+                const isLastElement = i === code.length - 1;
+
+                if (element === '.') {
+                    await generateTone(DOT_DURATION); // Dot
+                } else if (element === '-') {
+                    await generateTone(DOT_DURATION * 3); // Dash
+                }
+
+                if (!stopSignal) {
+                    // Intra-character space (1 unit) unless it's the last element of the letter
+                    if (!isLastElement) {
+                        await generateSilence(DOT_DURATION);
+                    }
+                }
+            }
+
+            if (stopSignal) break;
+
+            // Inter-character space (3 units) between letters
+            await generateSilence(DOT_DURATION * 3);
+            fullMorse += ' ';
+            if (updateOutput) document.getElementById('morseOutput').textContent = fullMorse;
+        }
+
+        // Cleanup
+        isPlaying = false;
+        stopSignal = false;
+        document.getElementById('playButton').disabled = false;
+        document.getElementById('stopButton').disabled = true;
+    }
+
+    // Function to stop the ongoing playback immediately
+    function stopPlayback() {
+        if (isPlaying) {
+            stopSignal = true; // Signal the loop to stop
+            isPlaying = false;
+            document.getElementById('playButton').disabled = false;
+            document.getElementById('stopButton').disabled = true;
+        }
+    }
+
+    // --- Translator Mode Handler ---
+    function translateAndPlay() {
+        const text = document.getElementById('inputText').value;
+        if (!text.trim()) {
+            showMessage("Input Required", "Please type some text into the box to translate and play the Morse code.");
+            return;
+        }
+        playMorse(text, true);
+    }
+
+    // --- Practice Mode Logic ---
+    function getRandomChar() {
+        const keys = Object.keys(MORSE_MAP).filter(k => k !== ' ');
+        const randomIndex = Math.floor(Math.random() * keys.length);
+        return keys[randomIndex];
+    }
+
+    async function startPractice() {
+        if (isPlaying) {
+            showMessage("Playback Busy", "Please wait for the translator to finish or click 'Stop'.");
+            return;
+        }
+
+        // Disable start/check buttons and input while playing
+        document.getElementById('startPracticeButton').disabled = true;
+        document.getElementById('checkButton').disabled = true;
+        document.getElementById('practiceInput').disabled = true;
+        document.getElementById('practiceStatus').textContent = "Listening closely...";
+        document.getElementById('practiceInput').value = '';
+        document.getElementById('practiceStatus').className = 'status-box flex-1 text-center bg-yellow-50 p-3 rounded-lg border border-yellow-200 text-yellow-800 text-lg font-medium';
+
+
+        currentPracticeChar = getRandomChar();
+        
+        // Play the Morse code without updating the main output area
+        await playMorse(currentPracticeChar, false);
+
+        // Re-enable controls
+        document.getElementById('startPracticeButton').disabled = false;
+        document.getElementById('checkButton').disabled = false;
+        document.getElementById('practiceInput').disabled = false;
+        document.getElementById('practiceInput').focus();
+        document.getElementById('practiceStatus').textContent = "What was the character? Enter your guess below.";
+    }
+
+    function checkGuess() {
+        if (!currentPracticeChar) {
+            showMessage("Not Started", "Please click 'Start Next Character' first.");
+            return;
+        }
+
+        const guess = document.getElementById('practiceInput').value.toUpperCase().trim();
+        const statusBox = document.getElementById('practiceStatus');
+        const inputField = document.getElementById('practiceInput');
+        
+        if (guess.length !== 1) {
+            statusBox.textContent = "Please enter exactly one character.";
+            statusBox.className = 'status-box flex-1 text-center bg-red-100 p-3 rounded-lg border border-red-300 text-red-800 text-lg font-medium';
+            return;
+        }
+
+        if (guess === currentPracticeChar) {
+            statusBox.textContent = `Correct! It was "${currentPracticeChar}". Click 'Start Next Character' for the next one.`;
+            statusBox.className = 'status-box flex-1 text-center bg-green-100 p-3 rounded-lg border border-green-300 text-green-800 text-lg font-medium';
+            currentPracticeChar = null;
+            inputField.disabled = true;
+            document.getElementById('checkButton').disabled = true;
+        } else {
+            statusBox.textContent = `Incorrect. Try again, or click 'Start Next Character' to reveal the answer (${currentPracticeChar}) and move on.`;
+            statusBox.className = 'status-box flex-1 text-center bg-red-100 p-3 rounded-lg border border-red-300 text-red-800 text-lg font-medium';
+            inputField.value = ''; // Clear the input for another try
+        }
+    }
+
+    window.onload = function() {
+        // Automatically try to initialize AudioContext on a non-critical event
+        // This is a common pattern to prepare audio, though a direct user click is usually needed to unlock it.
+        initAudio(); 
+    }
+</script>
+
+</body>
+</html>
+
