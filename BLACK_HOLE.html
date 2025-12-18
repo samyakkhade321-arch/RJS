@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hand Controlled Black Hole - Color Edition</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: radial-gradient(ellipse at center, #0a0a1a 0%, #000002 70%);
+            color: #e0e0ff;
+            font-family: 'Inter', sans-serif;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        #info {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            text-align: center;
+            color: rgba(220, 220, 255, 0.9);
+            font-size: 18px;
+            letter-spacing: 0.5px;
+            pointer-events: none;
+            z-index: 100;
+            text-shadow: 0 1px 5px rgba(0, 0, 0, 0.7);
+            transition: opacity 2s ease-in-out 1s;
+        }
+        
+        /* Control Panels */
+        .ui-panel {
+            position: absolute;
+            background-image: linear-gradient(145deg, rgba(20, 25, 45, 0.85), rgba(10, 15, 30, 0.9));
+            backdrop-filter: blur(10px) saturate(160%);
+            -webkit-backdrop-filter: blur(10px) saturate(160%);
+            padding: 15px 20px;
+            border-radius: 10px;
+            border: 1px solid rgba(180, 180, 220, 0.15);
+            color: rgba(225, 225, 255, 0.9);
+            font-size: 14px;
+            user-select: none;
+            z-index: 50;
+            transition: opacity 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(180,180,220,0.07) inset;
+            box-sizing: border-box;
+            opacity: 0;
+            transform: translateY(15px);
+            animation: panelFadeIn 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.2s forwards;
+        }
+        @keyframes panelFadeIn { to { opacity: 1; transform: translateY(0); } }
+        .ui-panel:hover { box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(180,180,220,0.09) inset; }
+        
+        /* Color Control Panel */
+        #color-controls {
+            top: 20px;
+            left: 20px;
+            width: 200px;
+        }
+        #controls { bottom: 20px; right: 20px; }
+        
+        .control-group {
+            margin: 10px 0;
+        }
+        .control-label {
+            display: block;
+            margin-bottom: 5px;
+            color: #aaccff;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .color-button {
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            margin: 3px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: transform 0.2s, border-color 0.2s;
+            display: inline-block;
+        }
+        .color-button:hover {
+            transform: scale(1.2);
+        }
+        .color-button.active {
+            border-color: white;
+            transform: scale(1.1);
+        }
+        .color-slider {
+            width: 100%;
+            margin: 5px 0;
+            -webkit-appearance: none;
+            height: 5px;
+            border-radius: 3px;
+            background: linear-gradient(to right, #000428, #004e92);
+            outline: none;
+        }
+        .color-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background: #88aaff;
+            cursor: pointer;
+            border: 2px solid white;
+        }
+        
+        /* Camera Panel */
+        #camera-panel {
+            bottom: 20px;
+            left: 20px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 8px;
+        }
+        #cam-preview {
+            width: 200px;
+            height: 150px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+            background: #000;
+        }
+        #webcam {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+        }
+        #gesture-status {
+            text-align: center;
+            font-size: 11px;
+            margin-top: 5px;
+            color: #00ff00;
+            text-shadow: 0 1px 2px #000;
+        }
+        #start-camera {
+            background: linear-gradient(145deg, #0066ff, #0044cc);
+            border: none;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+            width: 100%;
+            font-size: 12px;
+            transition: background 0.3s;
+        }
+        #start-camera:hover {
+            background: linear-gradient(145deg, #0088ff, #0066ff);
+        }
+
+        /* Gesture Guide */
+        #gesture-guide {
+            position: absolute;
+            top: 100px;
+            left: 20px;
+            background: rgba(10, 15, 30, 0.85);
+            backdrop-filter: blur(5px);
+            border-radius: 10px;
+            padding: 15px;
+            border: 1px solid rgba(180, 180, 220, 0.15);
+            max-width: 250px;
+            z-index: 150;
+            opacity: 0;
+            animation: panelFadeIn 0.7s ease 1s forwards;
+        }
+        #gesture-guide h3 {
+            margin: 0 0 10px 0;
+            color: #aaccff;
+        }
+        .gesture-item {
+            margin: 8px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .gesture-icon {
+            width: 24px;
+            height: 24px;
+            background: rgba(100, 150, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        @media (max-width: 768px) {
+            #color-controls { top: 10px; left: 10px; width: 180px; }
+            #camera-panel { bottom: 10px; left: 10px; }
+            #cam-preview { width: 150px; height: 113px; }
+            #gesture-guide { top: 150px; left: 10px; max-width: 200px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="info">
+        Hand Controlled Black Hole - Move Your Hand!<br>
+        <span style="font-size: 14px; opacity: 0.8;">Click "Start Camera" to begin hand control</span>
+    </div>
+
+    <!-- Color Controls Panel -->
+    <div id="color-controls" class="ui-panel">
+        <h3 style="margin: 0 0 15px 0; color: #88aaff;">Black Hole Colors</h3>
+        
+        <div class="control-group">
+            <div class="control-label">Event Horizon Glow</div>
+            <div>
+                <div class="color-button" style="background: #ff4400;" data-color="0xff4400"></div>
+                <div class="color-button" style="background: #00ff88;" data-color="0x00ff88"></div>
+                <div class="color-button" style="background: #0088ff;" data-color="0x0088ff"></div>
+                <div class="color-button" style="background: #aa00ff;" data-color="0xaa00ff"></div>
+                <div class="color-button" style="background: #ffff00;" data-color="0xffff00"></div>
+                <div class="color-button" style="background: #ff00ff;" data-color="0xff00ff"></div>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <div class="control-label">Accretion Disk</div>
+            <div>
+                <div class="color-button" style="background: linear-gradient(45deg, #ff0000, #ff8800);" data-disk="fire"></div>
+                <div class="color-button" style="background: linear-gradient(45deg, #00ff00, #00aaff);" data-disk="ice"></div>
+                <div class="color-button" style="background: linear-gradient(45deg, #aa00ff, #ff00aa);" data-disk="purple"></div>
+                <div class="color-button" style="background: linear-gradient(45deg, #ffff00, #ffaa00);" data-disk="sun"></div>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <div class="control-label">Glow Intensity</div>
+            <input type="range" min="0" max="2" step="0.1" value="1" class="color-slider" id="glow-intensity">
+        </div>
+        
+        <div class="control-group">
+            <div class="control-label">Rotation Speed</div>
+            <input type="range" min="0" max="5" step="0.1" value="1" class="color-slider" id="rotation-speed">
+        </div>
+    </div>
+
+    <!-- Gesture Guide -->
+    <div id="gesture-guide">
+        <h3>Hand Controls</h3>
+        <div class="gesture-item">
+            <div class="gesture-icon">←→</div>
+            <span>Move hand left/right = Rotate</span>
+        </div>
+        <div class="gesture-item">
+            <div class="gesture-icon">↑↓</div>
+            <span>Move hand up/down = Zoom</span>
+        </div>
+        <div class="gesture-item">
+            <div class="gesture-icon">🤏</div>
+            <span>Pinch fingers = Expand disk</span>
+        </div>
+        <div class="gesture-item">
+            <div class="gesture-icon">✊</div>
+            <span>Make fist = Reset view</span>
+        </div>
+    </div>
+
+    <!-- Camera Control Panel -->
+    <div id="camera-panel" class="ui-panel">
+        <div id="cam-preview">
+            <video id="webcam"></video>
+        </div>
+        <div id="gesture-status">Camera off - Click button below</div>
+        <button id="start-camera">🎥 Start Camera for Hand Control</button>
+    </div>
+
+    <!-- Rotation Controls -->
+    <div id="controls" class="ui-panel">
+        <div id="autoRotateToggle" style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
+            <div style="width: 20px; height: 20px; background: rgba(100, 150, 255, 0.3); border-radius: 50%; display: flex; align-items: center; justify-content: center;">↻</div>
+            <span>Auto-Rotate: <span id="rotate-status">OFF</span></span>
+        </div>
+    </div>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/",
+        "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0"
+      }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+        import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
+
+        // --- CONSTANTS ---
+        const BLACK_HOLE_RADIUS = 1.3;
+        const DISK_INNER_RADIUS = BLACK_HOLE_RADIUS + 0.2;
+        const DISK_OUTER_RADIUS = 8.0;
+        const DISK_TILT_ANGLE = Math.PI / 3.0;
+
+        // --- STATE VARIABLES ---
+        let handLandmarker = undefined;
+        let webcam = document.getElementById("webcam");
+        let gestureStatus = document.getElementById("gesture-status");
+        let lastVideoTime = -1;
+        let cameraStream = null;
+        
+        // Hand tracking state
+        let handState = { 
+            x: 0.5, y: 0.5, 
+            pinch: 0, 
+            fist: false,
+            active: false,
+            gestureName: "No hand detected"
+        };
+        
+        // Control values
+        let targetValues = { 
+            zoom: 10, 
+            angle: 0,
+            scale: 1.0
+        };
+        
+        // Color settings
+        let currentGlowColor = new THREE.Color(0xff4400);
+        let currentDiskPreset = 'fire';
+        let glowIntensity = 1.0;
+        let userRotationSpeed = 1.0;
+        let autoRotateEnabled = false;
+
+        // --- SCENE SETUP ---
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x020104, 0.025);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 4000);
+        camera.position.set(-6.5, 5.0, 6.5);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        document.body.appendChild(renderer.domElement);
+
+        // Post-processing
+        const composer = new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene, camera));
+        
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            0.8, 0.7, 0.8
+        );
+        composer.addPass(bloomPass);
+
+        // Gravitational lensing effect
+        const lensingShader = {
+            uniforms: {
+                "tDiffuse": { value: null },
+                "blackHoleScreenPos": { value: new THREE.Vector2(0.5, 0.5) },
+                "lensingStrength": { value: 0.12 },
+                "lensingRadius": { value: 0.3 },
+                "aspectRatio": { value: window.innerWidth / window.innerHeight },
+                "chromaticAberration": { value: 0.005 }
+            },
+            vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+            fragmentShader: `
+                uniform sampler2D tDiffuse;
+                uniform vec2 blackHoleScreenPos;
+                uniform float lensingStrength;
+                uniform float lensingRadius;
+                uniform float aspectRatio;
+                uniform float chromaticAberration;
+                varying vec2 vUv;
+                
+                void main() {
+                    vec2 screenPos = vUv;
+                    vec2 toCenter = screenPos - blackHoleScreenPos;
+                    toCenter.x *= aspectRatio;
+                    float dist = length(toCenter);
+                    
+                    float distortionAmount = lensingStrength / (dist * dist + 0.003);
+                    distortionAmount = clamp(distortionAmount, 0.0, 0.7);
+                    float falloff = smoothstep(lensingRadius, lensingRadius * 0.3, dist);
+                    distortionAmount *= falloff;
+                    
+                    vec2 offset = normalize(toCenter) * distortionAmount;
+                    offset.x /= aspectRatio;
+                    
+                    vec2 distortedUvR = screenPos - offset * (1.0 + chromaticAberration);
+                    vec2 distortedUvG = screenPos - offset;
+                    vec2 distortedUvB = screenPos - offset * (1.0 - chromaticAberration);
+                    
+                    float r = texture2D(tDiffuse, distortedUvR).r;
+                    float g = texture2D(tDiffuse, distortedUvG).g;
+                    float b = texture2D(tDiffuse, distortedUvB).b;
+                    
+                    gl_FragColor = vec4(r, g, b, 1.0);
+                }`
+        };
+        const lensingPass = new ShaderPass(lensingShader);
+        composer.addPass(lensingPass);
+
+        // Mouse controls (fallback when no hand)
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.035;
+        controls.rotateSpeed = 0.4;
+        controls.autoRotate = false;
+        controls.autoRotateSpeed = 0.1;
+        controls.target.set(0, 0, 0);
+        controls.minDistance = 2.5;
+        controls.maxDistance = 100;
+        controls.enablePan = false;
+        controls.update();
+
+        // --- STARS BACKGROUND ---
+        const starGeometry = new THREE.BufferGeometry();
+        const starCount = 150000;
+        const starPositions = new Float32Array(starCount * 3);
+        const starColors = new Float32Array(starCount * 3);
+        const starSizes = new Float32Array(starCount);
+        const starTwinkle = new Float32Array(starCount);
+        const starFieldRadius = 2000;
+        const starPalette = [
+            new THREE.Color(0x88aaff), new THREE.Color(0xffaaff), new THREE.Color(0xaaffff),
+            new THREE.Color(0xffddaa), new THREE.Color(0xffeecc), new THREE.Color(0xffffff),
+            new THREE.Color(0xff8888), new THREE.Color(0x88ff88), new THREE.Color(0xffff88),
+            new THREE.Color(0x88ffff)
+        ];
+
+        for (let i = 0; i < starCount; i++) {
+            const i3 = i * 3;
+            const phi = Math.acos(-1 + (2 * i) / starCount);
+            const theta = Math.sqrt(starCount * Math.PI) * phi;
+            const radius = Math.cbrt(Math.random()) * starFieldRadius + 100;
+
+            starPositions[i3] = radius * Math.sin(phi) * Math.cos(theta);
+            starPositions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+            starPositions[i3 + 2] = radius * Math.cos(phi);
+
+            const starColor = starPalette[Math.floor(Math.random() * starPalette.length)].clone();
+            starColor.multiplyScalar(Math.random() * 0.7 + 0.3);
+            starColors[i3] = starColor.r; starColors[i3 + 1] = starColor.g; starColors[i3 + 2] = starColor.b;
+            starSizes[i] = THREE.MathUtils.randFloat(0.6, 3.0);
+            starTwinkle[i] = Math.random() * Math.PI * 2;
+        }
+        starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+        starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+        starGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
+        starGeometry.setAttribute('twinkle', new THREE.BufferAttribute(starTwinkle, 1));
+
+        const starMaterial = new THREE.ShaderMaterial({
+            uniforms: {
+                uTime: { value: 0 },
+                uPixelRatio: { value: renderer.getPixelRatio() }
+            },
+            vertexShader: `
+                uniform float uTime;
+                uniform float uPixelRatio;
+                attribute float size;
+                attribute float twinkle;
+                varying vec3 vColor;
+                varying float vTwinkle;
+                
+                void main() {
+                    vColor = color;
+                    vTwinkle = sin(uTime * 2.5 + twinkle) * 0.5 + 0.5;
+                    
+                    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                    gl_PointSize = size * uPixelRatio * (300.0 / -mvPosition.z);
+                    gl_Position = projectionMatrix * mvPosition;
+                }
+            `,
+            fragmentShader: `
+                varying vec3 vColor;
+                varying float vTwinkle;
+                
+                void main() {
+                    float dist = distance(gl_PointCoord, vec2(0.5));
+                    if (dist > 0.5) discard;
+                    
+                    float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
+                    alpha *= (0.2 + vTwinkle * 0.8);
+                    
+                    gl_FragColor = vec4(vColor, alpha);
+                }
+            `,
+            transparent: true,
+            vertexColors: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+
+        const stars = new THREE.Points(starGeometry, starMaterial);
+        scene.add(stars);
+
+        // --- BLACK HOLE EVENT HORIZON (Glow) ---
+        const eventHorizonGeom = new THREE.SphereGeometry(BLACK_HOLE_RADIUS * 1.05, 128, 64);
+        const eventHorizonMat = new THREE.ShaderMaterial({
+            uniforms: {
+                uTime: { value: 0 },
+                uCameraPosition: { value: camera.position },
+                uGlowColor: { value: new THREE.Color(0xff4400) },
+                uGlowIntensity: { value: 1.0 }
+            },
+            vertexShader: `
+                varying vec3 vNormal;
+                varying vec3 vPosition;
+                void main() {
+                    vNormal = normalize(normalMatrix * normal);
+                    vPosition = position;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform float uTime;
+                uniform vec3 uCameraPosition;
+                uniform vec3 uGlowColor;
+                uniform float uGlowIntensity;
+                varying vec3 vNormal;
+                varying vec3 vPosition;
+                
+                void main() {
+                    vec3 viewDirection = normalize(uCameraPosition - vPosition);
+                    float fresnel = 1.0 - abs(dot(vNormal, viewDirection));
+                    fresnel = pow(fresnel, 2.5);
+                    
+                    vec3 glowColor = uGlowColor * uGlowIntensity;
+                    float pulse = sin(uTime * 2.5) * 0.15 + 0.85;
+                    
+                    gl_FragColor = vec4(glowColor * fresnel * pulse, fresnel * 0.4);
+                }
+            `,
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+            side: THREE.BackSide
+        });
+
+        const eventHorizon = new THREE.Mesh(eventHorizonGeom, eventHorizonMat);
+        scene.add(eventHorizon);
+
+        // --- BLACK HOLE CORE (Black sphere) ---
+        const blackHoleGeom = new THREE.SphereGeometry(BLACK_HOLE_RADIUS, 128, 64);
+        const blackHoleMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const blackHoleMesh = new THREE.Mesh(blackHoleGeom, blackHoleMat);
+        blackHoleMesh.renderOrder = 0;
+        scene.add(blackHoleMesh);
+
+        // --- ACCRETION DISK ---
+        const diskGeometry = new THREE.RingGeometry(DISK_INNER_RADIUS, DISK_OUTER_RADIUS, 256, 128);
+        const diskMaterial = new THREE.ShaderMaterial({
+            uniforms: {
+                uTime: { value: 0.0 },
+                uColorHot: { value: new THREE.Color(0xffffff) },
+                uColorMid1: { value: new THREE.Color(0xff7733) },
+                uColorMid2: { value: new THREE.Color(0xff4477) },
+                uColorMid3: { value: new THREE.Color(0x7744ff) },
+                uColorOuter: { value: new THREE.Color(0x4477ff) },
+                uNoiseScale: { value: 2.5 },
+                uFlowSpeed: { value: 0.22 },
+                uDensity: { value: 1.3 },
+                uRotationSpeed: { value: 1.0 }
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                varying float vRadius;
+                varying float vAngle;
+                void main() {
+                    vUv = uv;
+                    vRadius = length(position.xy);
+                    vAngle = atan(position.y, position.x);
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform float uTime;
+                uniform vec3 uColorHot;
+                uniform vec3 uColorMid1;
+                uniform vec3 uColorMid2;
+                uniform vec3 uColorMid3;
+                uniform vec3 uColorOuter;
+                uniform float uNoiseScale;
+                uniform float uFlowSpeed;
+                uniform float uDensity;
+                uniform float uRotationSpeed;
+
+                varying vec2 vUv;
+                varying float vRadius;
+                varying float vAngle;
+
+                vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+                vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+                vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+                vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+                
+                float snoise(vec3 v) {
+                    const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+                    const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+                    vec3 i  = floor(v + dot(v, C.yyy) );
+                    vec3 x0 = v - i + dot(i, C.xxx) ;
+                    vec3 g = step(x0.yzx, x0.xyz);
+                    vec3 l = 1.0 - g;
+                    vec3 i1 = min( g.xyz, l.zxy );
+                    vec3 i2 = max( g.xyz, l.zxy );
+                    vec3 x1 = x0 - i1 + C.xxx;
+                    vec3 x2 = x0 - i2 + C.yyy;
+                    vec3 x3 = x0 - D.yyy;
+                    i = mod289(i);
+                    vec4 p = permute( permute( permute( 
+                            i.z + vec4(0.0, i1.z, i2.z, 1.0 ))
+                            + i.y + vec4(0.0, i1.y, i2.y, 1.0 ))
+                            + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));
+                    float n_ = 0.142857142857;
+                    vec3 ns = n_ * D.wyz - D.xzx;
+                    vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+                    vec4 x_ = floor(j * ns.z);
+                    vec4 y_ = floor(j - 7.0 * x_ );
+                    vec4 x = x_ *ns.x + ns.yyyy;
+                    vec4 y = y_ *ns.x + ns.yyyy;
+                    vec4 h = 1.0 - abs(x) - abs(y);
+                    vec4 b0 = vec4( x.xy, y.xy );
+                    vec4 b1 = vec4( x.zw, y.zw );
+                    vec4 s0 = floor(b0)*2.0 + 1.0;
+                    vec4 s1 = floor(b1)*2.0 + 1.0;
+                    vec4 sh = -step(h, vec4(0.0));
+                    vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy ;
+                    vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww ;
+                    vec3 p0 = vec3(a0.xy,h.x);
+                    vec3 p1 = vec3(a0.zw,h.y);
+                    vec3 p2 = vec3(a1.xy,h.z);
+                    vec3 p3 = vec3(a1.zw,h.w);
+                    vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+                    p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+                    vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+                    m = m * m;
+                    return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3) ) );
+                }
+
+                void main() {
+                    float normalizedRadius = smoothstep(${DISK_INNER_RADIUS.toFixed(2)}, ${DISK_OUTER_RADIUS.toFixed(2)}, vRadius);
+                    
+                    float spiral = vAngle * 3.0 - (1.0 / (normalizedRadius + 0.1)) * 2.0;
+                    vec2 noiseUv = vec2(vUv.x + uTime * uFlowSpeed * uRotationSpeed * (2.0 / (vRadius * 0.3 + 1.0)) + sin(spiral) * 0.1, vUv.y * 0.8 + cos(spiral) * 0.1);
+                    float noiseVal1 = snoise(vec3(noiseUv * uNoiseScale, uTime * 0.15));
+                    float noiseVal2 = snoise(vec3(noiseUv * uNoiseScale * 3.0 + 0.8, uTime * 0.22));
+                    float noiseVal3 = snoise(vec3(noiseUv * uNoiseScale * 6.0 + 1.5, uTime * 0.3));
+                    
+                    float noiseVal = (noiseVal1 * 0.45 + noiseVal2 * 0.35 + noiseVal3 * 0.2);
+                    noiseVal = (noiseVal + 1.0) * 0.5;
+                    
+                    vec3 color = uColorOuter;
+                    color = mix(color, uColorMid3, smoothstep(0.0, 0.25, normalizedRadius));
+                    color = mix(color, uColorMid2, smoothstep(0.2, 0.55, normalizedRadius));
+                    color = mix(color, uColorMid1, smoothstep(0.5, 0.75, normalizedRadius));
+                    color = mix(color, uColorHot, smoothstep(0.7, 0.95, normalizedRadius));
+                    
+                    color *= (0.5 + noiseVal * 1.0);
+                    float brightness = pow(1.0 - normalizedRadius, 1.0) * 3.5 + 0.5;
+                    brightness *= (0.3 + noiseVal * 2.2);
+                    
+                    float pulse = sin(uTime * 1.8 * uRotationSpeed + normalizedRadius * 12.0 + vAngle * 2.0) * 0.15 + 0.85;
+                    brightness *= pulse;
+                    
+                    float alpha = uDensity * (0.2 + noiseVal * 0.9);
+                    alpha *= smoothstep(0.0, 0.15, normalizedRadius);
+                    alpha *= (1.0 - smoothstep(0.85, 1.0, normalizedRadius));
+                    alpha = clamp(alpha, 0.0, 1.0);
+
+                    gl_FragColor = vec4(color * brightness, alpha);
+                }
+            `,
+            transparent: true,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending
+        });
+
+        const accretionDisk = new THREE.Mesh(diskGeometry, diskMaterial);
+        accretionDisk.rotation.x = DISK_TILT_ANGLE;
+        accretionDisk.renderOrder = 1;
+        scene.add(accretionDisk);
+
+        // --- COLOR CONTROLS ---
+        function updateGlowColor(colorHex) {
+            currentGlowColor.set(colorHex);
+            eventHorizonMat.uniforms.uGlowColor.value.copy(currentGlowColor);
+            
+            // Update active button
+            document.querySelectorAll('.color-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`.color-button[data-color="${colorHex}"]`).classList.add('active');
+        }
+
+        function updateDiskColors(preset) {
+            currentDiskPreset = preset;
+            let colors;
+            
+            switch(preset) {
+                case 'fire':
+                    colors = {
+                        hot: new THREE.Color(0xffffff),
+                        mid1: new THREE.Color(0xff7733),
+                        mid2: new THREE.Color(0xff4477),
+                        mid3: new THREE.Color(0x7744ff),
+                        outer: new THREE.Color(0x4477ff)
+                    };
+                    break;
+                case 'ice':
+                    colors = {
+                        hot: new THREE.Color(0xffffff),
+                        mid1: new THREE.Color(0x00ffff),
+                        mid2: new THREE.Color(0x0088ff),
+                        mid3: new THREE.Color(0x0044aa),
+                        outer: new THREE.Color(0x000088)
+                    };
+                    break;
+                case 'purple':
+                    colors = {
+                        hot: new THREE.Color(0xffffff),
+                        mid1: new THREE.Color(0xff00ff),
+                        mid2: new THREE.Color(0xaa00ff),
+                        mid3: new THREE.Color(0x7700aa),
+                        outer: new THREE.Color(0x440088)
+                    };
+                    break;
+                case 'sun':
+                    colors = {
+                        hot: new THREE.Color(0xffffff),
+                        mid1: new THREE.Color(0xffff00),
+                        mid2: new THREE.Color(0xffaa00),
+                        mid3: new THREE.Color(0xff6600),
+                        outer: new THREE.Color(0xff3300)
+                    };
+                    break;
+            }
+            
+            diskMaterial.uniforms.uColorHot.value.copy(colors.hot);
+            diskMaterial.uniforms.uColorMid1.value.copy(colors.mid1);
+            diskMaterial.uniforms.uColorMid2.value.copy(colors.mid2);
+            diskMaterial.uniforms.uColorMid3.value.copy(colors.mid3);
+            diskMaterial.uniforms.uColorOuter.value.copy(colors.outer);
+            
+            // Update active button
+            document.querySelectorAll('.color-button[data-disk]').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`.color-button[data-disk="${preset}"]`).classList.add('active');
+        }
+
+        // Initialize color controls
+        document.querySelectorAll('.color-button[data-color]').forEach(button => {
+            button.addEventListener('click', () => {
+                const colorHex = button.getAttribute('data-color');
+                updateGlowColor(colorHex);
+            });
+        });
+
+        document.querySelectorAll('.color-button[data-disk]').forEach(button => {
+            button.addEventListener('click', () => {
+                const preset = button.getAttribute('data-disk');
+                updateDiskColors(preset);
+            });
+        });
+
+        document.getElementById('glow-intensity').addEventListener('input', (e) => {
+            glowIntensity = parseFloat(e.target.value);
+            eventHorizonMat.uniforms.uGlowIntensity.value = glowIntensity;
+        });
+
+        document.getElementById('rotation-speed').addEventListener('input', (e) => {
+            userRotationSpeed = parseFloat(e.target.value);
+            diskMaterial.uniforms.uRotationSpeed.value = userRotationSpeed;
+        });
+
+        // Auto-rotate toggle
+        document.getElementById('autoRotateToggle').addEventListener('click', () => {
+            autoRotateEnabled = !autoRotateEnabled;
+            controls.autoRotate = autoRotateEnabled;
+            document.getElementById('rotate-status').textContent = autoRotateEnabled ? 'ON' : 'OFF';
+        });
+
+        // --- HAND TRACKING SYSTEM ---
+        async function startCamera() {
+            try {
+                const startButton = document.getElementById('start-camera');
+                startButton.textContent = "Starting camera...";
+                startButton.disabled = true;
+                
+                // Request camera with better constraints
+                cameraStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: "user"
+                    } 
+                });
+                
+                webcam.srcObject = cameraStream;
+                webcam.play();
+                
+                // Initialize MediaPipe hand tracking
+                const vision = await FilesetResolver.forVisionTasks(
+                    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
+                );
+                
+                handLandmarker = await HandLandmarker.createFromOptions(vision, {
+                    baseOptions: {
+                        modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
+                        delegate: "GPU"
+                    },
+                    runningMode: "VIDEO",
+                    numHands: 1
+                });
+                
+                gestureStatus.textContent = "Camera active - Show your hand!";
+                gestureStatus.style.color = "#00ff00";
+                startButton.style.display = "none";
+                
+                // Start detection
+                detectHands();
+                
+            } catch (error) {
+                console.error("Camera error:", error);
+                gestureStatus.textContent = "Camera error: " + error.message;
+                gestureStatus.style.color = "red";
+                
+                const startButton = document.getElementById('start-camera');
+                startButton.textContent = "Retry Camera";
+                startButton.disabled = false;
+            }
+        }
+
+        // Start camera button
+        document.getElementById('start-camera').addEventListener('click', startCamera);
+
+        async function detectHands() {
+            if (!handLandmarker || !webcam.videoWidth) {
+                requestAnimationFrame(detectHands);
+                return;
+            }
+            
+            if (webcam.currentTime !== lastVideoTime) {
+                lastVideoTime = webcam.currentTime;
+                
+                try {
+                    const results = handLandmarker.detectForVideo(webcam, performance.now());
+                    
+                    if (results.landmarks && results.landmarks.length > 0) {
+                        const marks = results.landmarks[0];
+                        
+                        // Get hand center (average of wrist and palm base)
+                        const wrist = marks[0];
+                        const middleBase = marks[9];
+                        
+                        handState.x = 1.0 - ((wrist.x + middleBase.x) / 2); // Invert for mirror
+                        handState.y = (wrist.y + middleBase.y) / 2;
+                        
+                        // Calculate pinch between thumb tip (4) and index tip (8)
+                        const dx = marks[4].x - marks[8].x;
+                        const dy = marks[4].y - marks[8].y;
+                        handState.pinch = Math.sqrt(dx*dx + dy*dy);
+                        
+                        // Detect fist (fingertips close to palm)
+                        let closedFingers = 0;
+                        const palmCenter = marks[9]; // Middle finger base
+                        const fingertips = [4, 8, 12, 16, 20]; // thumb, index, middle, ring, pinky
+                        
+                        for (let tipIndex of fingertips) {
+                            const tip = marks[tipIndex];
+                            const distance = Math.sqrt(
+                                Math.pow(tip.x - palmCenter.x, 2) + 
+                                Math.pow(tip.y - palmCenter.y, 2)
+                            );
+                            if (distance < 0.12) closedFingers++;
+                        }
+                        
+                        handState.fist = closedFingers >= 4;
+                        handState.active = true;
+                        
+                        // Update status text
+                        if (handState.fist) {
+                            handState.gestureName = "👊 Fist (Resetting)";
+                        } else if (handState.pinch < 0.08) {
+                            handState.gestureName = "🤏 Pinched";
+                        } else {
+                            handState.gestureName = "👋 Hand detected";
+                        }
+                        
+                        gestureStatus.textContent = handState.gestureName;
+                        gestureStatus.style.color = "#00ff00";
+                        
+                    } else {
+                        handState.active = false;
+                        handState.gestureName = "Show hand to camera";
+                        gestureStatus.textContent = handState.gestureName;
+                        gestureStatus.style.color = "#ffff00";
+                    }
+                } catch (error) {
+                    console.error("Detection error:", error);
+                }
+            }
+            
+            requestAnimationFrame(detectHands);
+        }
+
+        // --- ANIMATION LOOP ---
+        const clock = new THREE.Clock();
+        const blackHoleScreenPosVec3 = new THREE.Vector3();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const elapsedTime = clock.getElapsedTime();
+            const deltaTime = clock.getDelta();
+
+            // HAND GESTURE CONTROLS
+            if (handState.active) {
+                controls.enabled = false; // Disable mouse when hand is active
+                
+                // 1. ROTATION: Hand X controls rotation speed
+                const rotationAmount = (handState.x - 0.5) * 8;
+                targetValues.angle += rotationAmount * deltaTime * 2;
+                
+                // 2. ZOOM: Hand Y controls distance
+                const zoomTarget = 4 + (handState.y * 25);
+                targetValues.zoom += (zoomTarget - targetValues.zoom) * 0.1;
+                
+                // 3. DISK SCALE: Pinch controls disk size
+                let scaleTarget = 1.0;
+                if (handState.pinch < 0.08) {
+                    scaleTarget = 0.6; // Tight pinch = small
+                } else if (handState.pinch < 0.15) {
+                    scaleTarget = 0.8;
+                } else if (handState.pinch < 0.25) {
+                    scaleTarget = 1.2;
+                } else {
+                    scaleTarget = 1.8; // Wide open = large
+                }
+                targetValues.scale += (scaleTarget - targetValues.scale) * 0.15;
+                
+                // 4. FIST: Reset everything
+                if (handState.fist) {
+                    targetValues.zoom = 10;
+                    targetValues.scale = 1.0;
+                    targetValues.angle = 0;
+                }
+                
+                // Apply camera position based on hand
+                camera.position.x = targetValues.zoom * Math.sin(targetValues.angle);
+                camera.position.z = targetValues.zoom * Math.cos(targetValues.angle);
+                camera.position.y = targetValues.zoom * 0.4;
+                camera.lookAt(0, 0, 0);
+                
+            } else {
+                controls.enabled = true; // Enable mouse when no hand
+                if (!autoRotateEnabled) controls.update();
+                
+                // Smooth return to normal
+                targetValues.scale += (1.0 - targetValues.scale) * 0.05;
+            }
+
+            // Apply visual effects
+            accretionDisk.scale.set(targetValues.scale, targetValues.scale, targetValues.scale);
+            
+            // Update disk effects based on scale
+            diskMaterial.uniforms.uNoiseScale.value = 2.5 * Math.pow(targetValues.scale, 1.5);
+            diskMaterial.uniforms.uFlowSpeed.value = 0.22 * targetValues.scale;
+            diskMaterial.uniforms.uDensity.value = 1.3 * (0.8 + targetValues.scale * 0.4);
+            
+            // Update shader uniforms
+            diskMaterial.uniforms.uTime.value = elapsedTime;
+            starMaterial.uniforms.uTime.value = elapsedTime;
+            eventHorizonMat.uniforms.uTime.value = elapsedTime;
+            eventHorizonMat.uniforms.uCameraPosition.value.copy(camera.position);
+            
+            // Gravitational lensing effect
+            blackHoleScreenPosVec3.copy(blackHoleMesh.position).project(camera);
+            lensingPass.uniforms.blackHoleScreenPos.value.set(
+                (blackHoleScreenPosVec3.x + 1) / 2,
+                (blackHoleScreenPosVec3.y + 1) / 2
+            );
+            
+            // Gentle scene rotation
+            stars.rotation.y += deltaTime * 0.003 * userRotationSpeed;
+            accretionDisk.rotation.z += deltaTime * 0.005 * userRotationSpeed * targetValues.scale;
+
+            // Render
+            composer.render(deltaTime);
+        }
+
+        // --- WINDOW RESIZE ---
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+            bloomPass.resolution.set(window.innerWidth, window.innerHeight);
+            lensingPass.uniforms.aspectRatio.value = window.innerWidth / window.innerHeight;
+        });
+
+        // Hide info after 5 seconds
+        setTimeout(() => {
+            const info = document.getElementById('info');
+            if (info) info.style.opacity = '0';
+        }, 5000);
+
+        // Start animation
+        animate();
+        
+        // Initialize with default colors
+        updateGlowColor('0xff4400');
+        updateDiskColors('fire');
+        
+        // Activate first buttons
+        document.querySelector('.color-button[data-color="0xff4400"]').classList.add('active');
+        document.querySelector('.color-button[data-disk="fire"]').classList.add('active');
+    </script>
+</body>
+</html>
