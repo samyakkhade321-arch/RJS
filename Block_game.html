@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Neon Tetris — Futuristic</title>
+<style>
+    /* ---------- futuristic skin ---------- */
+    :root{
+        --bg:#000513;
+        --grid:rgba(0,255,255,0.08);
+        --line:rgba(0,255,255,0.25);
+        --text:#00ffff;
+        --glow:0 0 4px #00ffff,0 0 8px #00ffff,0 0 12px #00ffff;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;}
+    body{
+        background:var(--bg);
+        color:var(--text);
+        overflow:hidden;
+        display:flex;
+        height:100vh;
+        align-items:center;
+        justify-content:center;
+    }
+    #container{
+        position:relative;
+        display:flex;
+        gap:2rem;
+        filter:drop-shadow(0 0 15px rgba(0,255,255,0.4));
+    }
+    canvas{
+        border:2px solid var(--line);
+        background:radial-gradient(circle at center,rgba(0,25,35,.6),rgba(0,5,20,.9));
+        box-shadow:0 0 20px rgba(0,255,255,.4);
+    }
+    #hud{
+        width:140px;
+        display:flex;
+        flex-direction:column;
+        gap:1.2rem;
+    }
+    .panel{
+        background:rgba(0,255,255,.05);
+        border:1px solid var(--line);
+        padding:.7rem 1rem;
+        box-shadow:var(--glow);
+        border-radius:6px;
+    }
+    .panel h3{font-size:1rem;margin-bottom:.3rem;text-shadow:var(--glow);}
+    .panel p{font-size:1.4rem;font-weight:700;}
+    #next canvas{width:100%;height:120px;}
+    #controls{font-size:.75rem;line-height:1.4;}
+</style>
+</head>
+<body>
+<div id="container">
+    <canvas id="board"></canvas>
+    <div id="hud">
+        <div class="panel">
+            <h3>SCORE</h3>
+            <p id="score">0</p>
+        </div>
+        <div class="panel" id="next">
+            <h3>NEXT</h3>
+            <canvas id="nextCv"></canvas>
+        </div>
+        <div class="panel" id="controls">
+            <strong>Controls</strong><br>
+            ← → Move<br>
+            ↓ Soft drop<br>
+            ↑ Rotate<br>
+            SPACE Hard drop<br>
+            P Pause
+        </div>
+    </div>
+</div>
+
+<script>
+/* ---------- config ---------- */
+const COLS=10, ROWS=20, TILE=28;          // logical tiles
+const boardCv=document.getElementById('board');
+const ctx=boardCv.getContext('2d');
+const nextCv=document.getElementById('nextCv');
+const nxt=nextCv.getContext('2d');
+const scoreEl=document.getElementById('score');
+
+function resize(){
+    const scale=Math.min(innerWidth/(COLS*TILE+200),innerHeight/(ROWS*TILE+100),1.4);
+    boardCv.width=COLS*TILE*scale;
+    boardCv.height=ROWS*TILE*scale;
+    boardCv.style.width=boardCv.width+'px';
+    boardCv.style.height=boardCv.height+'px';
+    ctx.setTransform(scale,0,0,scale,0,0);   // keep logical coords
+    nextCv.width=6*TILE; nextCv.height=6*TILE;
+}
+resize(); window.addEventListener('resize',resize);
+
+/* ---------- tetromino data ---------- */
+const SHAPES=[
+    [[0,0],[1,0],[0,1],[1,1]],       // O
+    [[0,0],[1,0],[2,0],[3,0]],       // I
+    [[1,0],[0,1],[1,1],[2,1]],       // T
+    [[0,0],[0,1],[1,1],[2,1]],       // L
+    [[2,0],[0,1],[1,1],[2,1]],       // J
+    [[1,0],[2,0],[0,1],[1,1]],       // S
+    [[0,0],[1,0],[1,1],[2,1]]        // Z
+];
+const COLORS=['#ff0','#0ff','#a0f','#f92','#09f','#0f0','#f22'];
+
+/* ---------- game state ---------- */
+let board=Array(ROWS).fill().map(_=>Array(COLS).fill(0));
+let score=0, dropCtr=0, dropInterval=500; // ms
+let current, nextType, pos, rot;
+let paused=false, over=false;
+
+function rndPiece(){ return Math.floor(Math.random()*7);}
+
+function createPiece(t){
+    return SHAPES[t].map(([x,y])=>({x,y}));
+}
+
+function rotate(p, r){
+    // 4-state rotation
+    for(let i=0;i<r;i++){
+        let nx=-p.y, ny=p.x;
+        p.x=nx; p.y=ny;
+    }
+    return p;
+}
+
+function valid(piece, dx, dy, r){
+    for(let i=0;i<4;i++){
+        let {x,y}=rotate({...piece[i]},r);
+        x+=pos.x+dx; y+=pos.y+dy;
+        if(x<0||x>=COLS||y>=ROWS) return false;
+        if(y>=0&&board[y][x]) return false;
+    }
+    return true;
+}
+
+function lock(){
+    current.forEach(p=>{
+        let {x,y}=rotate({...p},rot);
+        x+=pos.x; y+=pos.y;
+        if(y>=0) board[y][x]=current.type+1;
+    });
+}
+
+function clearLines(){
+    let count=0;
+    outer:for(let y=ROWS-1;y>=0;y--){
+        for(let x=0;x<COLS;x++) if(!board[y][x]) continue outer;
+        board.splice(y,1);
+        board.unshift(Array(COLS).fill(0));
+        count++; y++;
+    }
+    if(count) score+=count===1?100:count===2?300:count===3?500:800;
+}
+
+function spawn(){
+    current=createPiece(nextType); current.type=nextType;
+    nextType=rndPiece();
+    pos={x:Math.floor(COLS/2)-1,y:0}; rot=0;
+    if(!valid(current,0,0,rot)){ over=true; board=Array(ROWS).fill().map(_=>Array(COLS).fill(0)); score=0;}
+}
+
+function hardDrop(){
+    let dy=0;
+    while(valid(current,0,dy+1,rot)) dy++;
+    pos.y+=dy;
+}
+
+/* ---------- input ---------- */
+document.addEventListener('keydown',e=>{
+    if(over){ over=false; spawn(); return;}
+    if(e.code==='KeyP'){ paused=!paused; return;}
+    if(paused) return;
+    if(e.code==='ArrowLeft' ){ if(valid(current,-1,0,rot)) pos.x--;}
+    if(e.code==='ArrowRight'){ if(valid(current, 1,0,rot)) pos.x++;}
+    if(e.code==='ArrowUp'   ){ let r=(rot+1)&3; if(valid(current,0,0,r)) rot=r;}
+    if(e.code==='ArrowDown' ){ dropInterval=50;}
+    if(e.code==='Space'     ){ hardDrop(); lock(); clearLines(); spawn();}
+});
+document.addEventListener('keyup',e=>{
+    if(e.code==='ArrowDown') dropInterval=500;
+});
+
+/* ---------- draw helpers ---------- */
+function drawTile(x,y,color,ghost=false){
+    ctx.fillStyle=color;
+    ctx.globalAlpha=ghost?.3:1;
+    ctx.fillRect(x*TILE+1,y*TILE+1,TILE-2,TILE-2);
+    ctx.globalAlpha=1;
+    ctx.strokeStyle='rgba(0,255,255,.4)';
+    ctx.strokeRect(x*TILE,y*TILE,TILE,TILE);
+}
+
+function drawBoard(){
+    // background stars
+    ctx.fillStyle='#000513'; ctx.fillRect(0,0,COLS*TILE,ROWS*TILE);
+    // grid
+    ctx.strokeStyle='rgba(0,255,255,.08)';
+    for(let x=0;x<=COLS;x++){ ctx.beginPath(); ctx.moveTo(x*TILE,0); ctx.lineTo(x*TILE,ROWS*TILE); ctx.stroke();}
+    for(let y=0;y<=ROWS;y++){ ctx.beginPath(); ctx.moveTo(0,y*TILE); ctx.lineTo(COLS*TILE,y*TILE); ctx.stroke();}
+
+    // locked blocks
+    for(let y=0;y<ROWS;y++)
+        for(let x=0;x<COLS;x++)
+            if(board[y][x]) drawTile(x,y,COLORS[board[y][x]-1]);
+
+    // ghost
+    let g={...pos};
+    while(valid(current,0,g.y+1-pos.y,rot)) g.y++;
+    current.forEach(p=>{
+        let {x,y}=rotate({...p},rot);
+        drawTile(g.x+x,g.y+y,COLORS[current.type],true);
+    });
+
+    // current
+    current.forEach(p=>{
+        let {x,y}=rotate({...p},rot);
+        drawTile(pos.x+x,pos.y+y,COLORS[current.type]);
+    });
+}
+
+function drawNext(){
+    nxt.fillStyle='#000513'; nxt.fillRect(0,0,nextCv.width,nextCv.height);
+    let piece=createPiece(nextType);
+    let cx=3, cy=2;
+    nxt.strokeStyle='rgba(0,255,255,.2)';
+    nxt.strokeRect(0,0,nextCv.width,nextCv.height);
+    piece.forEach(p=>{
+        nxt.fillStyle=COLORS[nextType];
+        nxt.fillRect((cx+p.x)*TILE+1,(cy+p.y)*TILE+1,TILE-2,TILE-2);
+        nxt.strokeStyle='rgba(0,255,255,.4)'; nxt.strokeRect((cx+p.x)*TILE,(cy+p.y)*TILE,TILE,TILE);
+    });
+}
+
+/* ---------- game loop ---------- */
+let last=performance.now();
+function loop(t){
+    requestAnimationFrame(loop);
+    const dt=t-last; last=t;
+    if(!paused&&!over){
+        dropCtr+=dt;
+        if(dropCtr>=dropInterval){
+            dropCtr=0;
+            pos.y++;
+            if(!valid(current,0,0,rot)){ pos.y--; lock(); clearLines(); spawn();}
+        }
+    }
+    drawBoard();
+    drawNext();
+    scoreEl.textContent=score;
+    if(paused){ ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(0,0,COLS*TILE,ROWS*TILE);
+                ctx.fillStyle='#0ff'; ctx.font='bold 26px monospace';
+                ctx.textAlign='center'; ctx.fillText('PAUSED',COLS*TILE/2,ROWS*TILE/2);}
+    if(over){ ctx.fillStyle='rgba(0,0,0,.7)'; ctx.fillRect(0,0,COLS*TILE,ROWS*TILE);
+              ctx.fillStyle='#f22'; ctx.font='bold 28px monospace';
+              ctx.textAlign='center'; ctx.fillText('GAME OVER',COLS*TILE/2,ROWS*TILE/2-10);
+              ctx.fillStyle='#fff'; ctx.font='18px monospace';
+              ctx.fillText('Press any key to restart',COLS*TILE/2,ROWS*TILE/2+20);}
+}
+
+/* ---------- kick off ---------- */
+nextType=rndPiece(); spawn(); loop(performance.now());
+</script>
+</body>
+</html>
