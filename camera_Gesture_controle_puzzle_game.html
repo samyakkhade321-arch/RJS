@@ -1,0 +1,1861 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>✋ NEXUS — Hand-Control Puzzle</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3/drawing_utils.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&family=Orbitron:wght@700;900&display=swap" rel="stylesheet"/>
+
+  <style>
+    :root {
+      --bg:        #03050f;
+      --bg2:       #070d1f;
+      --panel:     rgba(8,18,42,0.92);
+      --cyan:      #00f5ff;
+      --cyan-dim:  rgba(0,245,255,0.15);
+      --cyan-glow: rgba(0,245,255,0.5);
+      --magenta:   #ff00e5;
+      --mag-dim:   rgba(255,0,229,0.15);
+      --gold:      #ffd700;
+      --green:     #39ff14;
+      --red:       #ff2244;
+      --txt:       #c8e0ff;
+      --txt-dim:   rgba(200,224,255,0.55);
+      --border:    rgba(0,245,255,0.22);
+      --tile-bg:   #0a1530;
+      --tile-border:#1a3a6a;
+      --radius:    14px;
+      --font-hud:  'Orbitron', sans-serif;
+      --font-ui:   'Rajdhani', sans-serif;
+      --font-mono: 'Share Tech Mono', monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--txt);
+      font-family: var(--font-ui);
+      min-height: 100vh;
+      overflow: hidden;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ──────────── ANIMATED BACKGROUND ──────────── */
+    #bgCanvas {      position: fixed; inset: 0;
+      width: 100%; height: 100%;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ──────────── SCAN LINE EFFECT ──────────── */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,245,255,0.018) 2px,
+        rgba(0,245,255,0.018) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    .wrapper {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 12px;
+    }
+
+    /* ══════════════ LEVEL SCREEN ══════════════ */
+    .level-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 95vh;
+      text-align: center;
+      gap: 0;
+    }
+    .level-screen.hidden { display: none; }
+
+    .nexus-logo {
+      font-family: var(--font-hud);
+      font-size: clamp(2.8rem, 8vw, 5.5rem);
+      font-weight: 900;
+      letter-spacing: 0.15em;
+      color: var(--cyan);
+      text-shadow: 0 0 20px var(--cyan), 0 0 60px var(--cyan-glow), 0 0 100px rgba(0,245,255,0.2);      line-height: 1;
+      animation: flicker 6s infinite;
+      margin-bottom: 4px;
+    }
+    .nexus-sub {
+      font-family: var(--font-mono);
+      font-size: clamp(0.7rem, 2vw, 0.95rem);
+      letter-spacing: 0.35em;
+      color: var(--magenta);
+      text-shadow: 0 0 12px var(--magenta);
+      margin-bottom: 48px;
+      text-transform: uppercase;
+    }
+
+    @keyframes flicker {
+      0%,94%,96%,100% { opacity: 1; }
+      95% { opacity: 0.85; }
+    }
+
+    .level-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      max-width: 680px;
+      width: 100%;
+    }
+
+    .level-card {
+      position: relative;
+      padding: 28px 16px 22px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--panel);
+      cursor: pointer;
+      transition: all 0.22s cubic-bezier(.4,0,.2,1);
+      overflow: hidden;
+      backdrop-filter: blur(10px);
+    }
+    .level-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, var(--cyan-dim), transparent);
+      opacity: 0;
+      transition: opacity 0.22s;
+    }
+    .level-card:hover::before { opacity: 1; }
+    .level-card:hover {
+      border-color: var(--cyan);
+      transform: translateY(-4px) scale(1.02);      box-shadow: 0 0 30px var(--cyan-glow), 0 12px 40px rgba(0,0,0,0.5);
+    }
+    .level-card.easy:hover   { border-color: var(--green); box-shadow: 0 0 30px rgba(57,255,20,0.4); }
+    .level-card.medium:hover { border-color: var(--cyan);  box-shadow: 0 0 30px var(--cyan-glow); }
+    .level-card.hard:hover   { border-color: var(--magenta); box-shadow: 0 0 30px rgba(255,0,229,0.5); }
+
+    .card-icon { font-size: 2.2rem; margin-bottom: 10px; }
+    .card-name {
+      font-family: var(--font-hud);
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      margin-bottom: 6px;
+    }
+    .card-grid-size {
+      font-family: var(--font-mono);
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--cyan);
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+    .level-card.easy   .card-grid-size { color: var(--green); text-shadow: 0 0 10px var(--green); }
+    .level-card.medium .card-grid-size { color: var(--cyan);  text-shadow: 0 0 10px var(--cyan); }
+    .level-card.hard   .card-grid-size { color: var(--magenta); text-shadow: 0 0 10px var(--magenta); }
+
+    .card-desc {
+      font-size: 0.8rem;
+      color: var(--txt-dim);
+      font-family: var(--font-mono);
+    }
+
+    .level-card::after {
+      content: '';
+      position: absolute;
+      top: 8px; right: 8px;
+      width: 14px; height: 14px;
+      border-top: 2px solid var(--cyan);
+      border-right: 2px solid var(--cyan);
+      opacity: 0.4;
+    }
+
+    /* ══════════════ GAME SCREEN ══════════════ */
+    .game-screen { width: 100%; max-width: 100%; }
+    .game-screen.hidden { display: none; }
+
+    /* ── HUD Header ── */
+    .hud {
+      display: flex;
+      align-items: center;      gap: 10px;
+      margin-bottom: 14px;
+      width: 100%;
+      max-width: 860px;
+      flex-wrap: wrap;
+    }
+    .hud-title {
+      font-family: var(--font-hud);
+      font-size: clamp(1rem, 3vw, 1.3rem);
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      color: var(--cyan);
+      text-shadow: 0 0 12px var(--cyan-glow);
+    }
+    .badge {
+      padding: 3px 12px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      font-weight: 700;
+      border: 1px solid;
+    }
+    .badge-easy   { border-color: var(--green); color: var(--green); background: rgba(57,255,20,0.1); }
+    .badge-medium { border-color: var(--cyan); color: var(--cyan); background: var(--cyan-dim); }
+    .badge-hard   { border-color: var(--magenta); color: var(--magenta); background: var(--mag-dim); }
+
+    .hud-stats {
+      margin-left: auto;
+      display: flex;
+      gap: 18px;
+      align-items: center;
+    }
+    .stat-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: var(--font-mono);
+    }
+    .stat-label { font-size: 0.6rem; color: var(--txt-dim); letter-spacing: 0.15em; text-transform: uppercase; }
+    .stat-val   { font-size: 1.25rem; color: var(--cyan); font-weight: 700; line-height: 1.1; }
+
+    .hud-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn {
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--txt);
+      font-family: var(--font-ui);
+      font-weight: 600;      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.18s;
+      backdrop-filter: blur(8px);
+      letter-spacing: 0.05em;
+    }
+    .btn:hover { background: var(--cyan-dim); border-color: var(--cyan); color: var(--cyan); }
+    .btn-track {
+      border-color: rgba(57,255,20,0.4);
+      color: var(--green);
+    }
+    .btn-track:hover { background: rgba(57,255,20,0.12); border-color: var(--green); }
+    .btn-track.active {
+      background: rgba(57,255,20,0.18);
+      border-color: var(--green);
+      box-shadow: 0 0 12px rgba(57,255,20,0.3);
+    }
+
+    /* ── Main Layout ── */
+    .game-layout {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+      justify-content: center;
+      flex-wrap: wrap;
+      width: 100%;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    /* ── Board ── */
+    .board-wrap {
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .board-bracket {
+      position: absolute;
+      width: 24px; height: 24px;
+      border-color: var(--cyan);
+      border-style: solid;
+      opacity: 0.7;
+    }
+    .board-bracket.tl { top: -6px; left: -6px; border-width: 2px 0 0 2px; }
+    .board-bracket.tr { top: -6px; right: -6px; border-width: 2px 2px 0 0; }
+    .board-bracket.bl { bottom: -6px; left: -6px; border-width: 0 0 2px 2px; }
+    .board-bracket.br { bottom: -6px; right: -6px; border-width: 0 2px 2px 0; }
+
+    .board {
+      display: grid;      gap: 5px;
+      padding: 10px;
+      background: var(--bg2);
+      border-radius: 16px;
+      box-shadow: 0 0 40px rgba(0,0,0,0.7), 0 0 0 1px var(--border);
+      width: min(90vw, 500px);
+      height: min(90vw, 500px);
+      max-width: 500px;
+      max-height: 500px;
+      position: relative;
+    }
+    .board.size-3 { grid-template-columns: repeat(3, 1fr); }
+    .board.size-4 { grid-template-columns: repeat(4, 1fr); }
+    .board.size-5 { grid-template-columns: repeat(5, 1fr); }
+
+    /* ── Tiles ── */
+    .tile {
+      border-radius: 10px;
+      border: 2px solid var(--tile-border);
+      background: var(--tile-bg);
+      background-repeat: no-repeat;
+      background-size: cover;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.12s, box-shadow 0.12s, transform 0.1s;
+      user-select: none;
+    }
+    .tile::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(0,245,255,0.06), transparent 60%);
+      pointer-events: none;
+    }
+    .tile:not(.empty):hover {
+      border-color: rgba(0,245,255,0.5);
+      transform: scale(1.03);
+    }
+    .tile.empty {
+      background: rgba(3,5,15,0.6);
+      border: 2px dashed rgba(0,245,255,0.1);
+      cursor: default;
+    }
+
+    .tile.hovered {
+      border-color: var(--cyan) !important;
+      box-shadow: 0 0 0 3px rgba(0,245,255,0.4), 0 0 20px var(--cyan-glow);
+      transform: scale(1.06);
+      z-index: 5;    }
+    .tile.valid-hover {
+      border-color: var(--green) !important;
+      box-shadow: 0 0 0 3px rgba(57,255,20,0.5), 0 0 25px rgba(57,255,20,0.4);
+    }
+    .tile.pinch-flash {
+      animation: pinchFlash 0.3s ease-out;
+    }
+    @keyframes pinchFlash {
+      0%   { transform: scale(1.06); box-shadow: 0 0 0 6px rgba(255,255,255,0.8), 0 0 40px white; }
+      100% { transform: scale(1); }
+    }
+
+    .tile-num {
+      position: absolute;
+      bottom: 4px; right: 6px;
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: rgba(0,245,255,0.6);
+      pointer-events: none;
+    }
+    .tile-image .tile-num { display: none; }
+
+    /* ── Side Panel ── */
+    .side-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      width: 180px;
+      flex-shrink: 0;
+    }
+
+    .panel-box {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      backdrop-filter: blur(10px);
+      position: relative;
+    }
+    .panel-box::before {
+      content: '';
+      position: absolute;
+      top: 8px; right: 8px;
+      width: 10px; height: 10px;
+      border-top: 1px solid var(--cyan);
+      border-right: 1px solid var(--cyan);
+      opacity: 0.5;
+    }
+    .panel-label {      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      color: var(--txt-dim);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    #referenceImg {
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      display: block;
+    }
+
+    .gesture-guide {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .gesture-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      color: var(--txt-dim);
+    }
+    .gesture-icon { font-size: 1.2rem; width: 24px; text-align: center; }
+    .gesture-desc { font-size: 0.75rem; font-family: var(--font-mono); }
+
+    /* ──────────── HAND TRACKING WINDOW ──────────── */
+    #videoContainer {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 260px;
+      height: 195px;
+      background: var(--bg2);
+      border-radius: 14px;
+      overflow: hidden;
+      border: 2px solid var(--border);
+      z-index: 1000;
+      display: none;
+      flex-direction: column;
+      box-shadow: 0 0 30px rgba(0,245,255,0.2), 0 10px 40px rgba(0,0,0,0.6);
+      transition: border-color 0.3s;
+    }
+    #videoContainer.show { display: flex; }    #videoContainer.hand-detected { border-color: var(--cyan); box-shadow: 0 0 30px var(--cyan-glow); }
+    #videoContainer.pinching { border-color: var(--green); box-shadow: 0 0 30px rgba(57,255,20,0.5); }
+
+    #videoElement {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+    }
+    #overlay {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 2;
+      transform: scaleX(-1);
+    }
+
+    .video-hud {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 10px;
+      background: linear-gradient(to bottom, rgba(3,5,15,0.9), transparent);
+      z-index: 10;
+    }
+    .video-hud-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      color: var(--cyan);
+    }
+    #handStatus {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--red);
+      box-shadow: 0 0 8px var(--red);
+      transition: all 0.2s;
+    }
+    #handStatus.on { background: var(--green); box-shadow: 0 0 8px var(--green); }
+
+    .video-metrics {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      display: flex;
+      justify-content: space-around;
+      padding: 4px 8px;
+      background: linear-gradient(to top, rgba(3,5,15,0.9), transparent);
+      z-index: 10;    }
+    .metric {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: var(--font-mono);
+    }
+    .metric-label { font-size: 8px; color: var(--txt-dim); letter-spacing: 0.1em; }
+    .metric-val   { font-size: 11px; color: var(--cyan); }
+
+    /* ──────────── CURSOR + TRAIL ──────────── */
+    .cursor-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9000;
+    }
+
+    #handCursor {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      transition: left 0.04s linear, top 0.04s linear;
+      pointer-events: none;
+    }
+
+    #handCursor .ring {
+      width: 36px; height: 36px;
+      border: 2px solid var(--cyan);
+      border-radius: 50%;
+      opacity: 0;
+      transition: opacity 0.15s, transform 0.15s, border-color 0.15s;
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%) scale(1);
+    }
+    #handCursor .dot {
+      width: 10px; height: 10px;
+      background: var(--cyan);
+      border-radius: 50%;
+      opacity: 0;
+      transition: opacity 0.15s, transform 0.15s, background 0.15s;
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 14px var(--cyan), 0 0 28px var(--cyan-glow);
+    }
+
+    #handCursor.active .ring { opacity: 1; }
+    #handCursor.active .dot  { opacity: 1; }
+    #handCursor.valid .ring {
+      border-color: var(--green);
+      transform: translate(-50%, -50%) scale(1.3);
+    }
+    #handCursor.valid .dot {
+      background: var(--green);
+      box-shadow: 0 0 14px var(--green), 0 0 28px rgba(57,255,20,0.5);
+      transform: translate(-50%, -50%) scale(1.3);
+    }
+
+    #handCursor.pinching .ring {
+      border-color: white;
+      transform: translate(-50%, -50%) scale(0.5);
+      opacity: 0.6;
+    }
+    #handCursor.pinching .dot {
+      background: white;
+      transform: translate(-50%, -50%) scale(0.3);
+      box-shadow: 0 0 20px white;
+    }
+
+    #trailCanvas {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 8999;
+    }
+
+    /* ──────────── PINCH RIPPLE ──────────── */
+    .pinch-ripple {
+      position: fixed;
+      width: 60px; height: 60px;
+      border: 2px solid var(--green);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 9100;
+      transform: translate(-50%, -50%) scale(0);
+      animation: ripple-out 0.5s ease-out forwards;
+    }
+    @keyframes ripple-out {
+      to { transform: translate(-50%, -50%) scale(3); opacity: 0; }
+    }
+
+    /* ──────────── GESTURE STATUS ──────────── */
+    #gestureStatus {
+      position: fixed;
+      bottom: 225px;
+      right: 20px;
+      width: 260px;
+      background: var(--panel);      color: var(--cyan);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      border: 1px solid var(--border);
+      z-index: 1001;
+      display: none;
+      letter-spacing: 0.05em;
+      backdrop-filter: blur(10px);
+    }
+    #gestureStatus .g-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 3px;
+    }
+    #gestureStatus .g-key { color: var(--txt-dim); }
+    #gestureStatus .g-val { color: var(--cyan); }
+    #gestureStatus .g-val.hot { color: var(--green); }
+    #gestureStatus .g-val.warn { color: var(--magenta); }
+
+    /* ──────────── WIN OVERLAY ──────────── */
+    .win-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.88);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 5000;
+    }
+    .win-overlay.hidden { display: none; }
+
+    .win-box {
+      background: var(--bg2);
+      border: 1px solid var(--cyan);
+      border-radius: 20px;
+      padding: 48px 40px;
+      text-align: center;
+      max-width: 420px;
+      width: 90%;
+      box-shadow: 0 0 80px var(--cyan-glow), 0 0 160px rgba(0,245,255,0.15);
+      animation: winEntrance 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    @keyframes winEntrance {
+      from { transform: scale(0.6); opacity: 0; }
+      to   { transform: scale(1); opacity: 1; }
+    }
+    .win-icon { font-size: 3.5rem; margin-bottom: 16px; animation: spin 2s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }    .win-title {
+      font-family: var(--font-hud);
+      font-size: 2rem;
+      color: var(--cyan);
+      text-shadow: 0 0 20px var(--cyan);
+      margin-bottom: 12px;
+    }
+    .win-stats {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+      margin: 20px 0 32px;
+      font-family: var(--font-mono);
+    }
+    .win-stat-box { display: flex; flex-direction: column; align-items: center; }
+    .win-stat-label { font-size: 0.65rem; color: var(--txt-dim); text-transform: uppercase; letter-spacing: 0.15em; }
+    .win-stat-val { font-size: 2rem; color: var(--cyan); font-weight: 700; }
+    .win-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+    /* ──────────── HELP MODAL ──────────── */
+    .help-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 6000;
+    }
+    .help-overlay.hidden { display: none; }
+    .help-modal {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      max-width: 480px;
+      width: 92%;
+      padding: 28px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .help-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .help-title {
+      font-family: var(--font-hud);
+      font-size: 1.3rem;
+      color: var(--cyan);      letter-spacing: 0.1em;
+    }
+    .help-close {
+      background: none;
+      border: none;
+      font-size: 1.8rem;
+      color: var(--txt-dim);
+      cursor: pointer;
+      line-height: 1;
+    }
+    .help-close:hover { color: var(--cyan); }
+    .help-section-title {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      letter-spacing: 0.2em;
+      color: var(--cyan);
+      text-transform: uppercase;
+      margin: 18px 0 10px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--border);
+    }
+    .help-row {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 10px;
+      font-size: 0.9rem;
+      color: var(--txt-dim);
+      line-height: 1.5;
+    }
+    .help-icon { font-size: 1.3rem; flex-shrink: 0; margin-top: -2px; }
+
+    /* ──────────── TIMER BAR ──────────── */
+    #timerBar {
+      height: 3px;
+      background: var(--bg2);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 12px;
+      max-width: 860px;
+      width: 100%;
+    }
+    #timerBarFill {
+      height: 100%;
+      background: linear-gradient(to right, var(--cyan), var(--magenta));
+      transition: width 1s linear;
+      box-shadow: 0 0 8px var(--cyan-glow);
+    }
+
+    /* ──────────── TOAST NOTIFICATIONS ──────────── */    #toastContainer {
+      position: fixed;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 8000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .toast {
+      background: var(--panel);
+      border: 1px solid var(--cyan);
+      border-radius: 8px;
+      padding: 8px 20px;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: var(--cyan);
+      backdrop-filter: blur(12px);
+      animation: toastIn 0.25s ease, toastOut 0.3s ease 1.2s forwards;
+      white-space: nowrap;
+    }
+    .toast.success { border-color: var(--green); color: var(--green); }
+    .toast.warn    { border-color: var(--magenta); color: var(--magenta); }
+    @keyframes toastIn  { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+    @keyframes toastOut { to   { opacity: 0; transform: translateY(-10px); } }
+
+    /* ──────────── DWELL PROGRESS RING ──────────── */
+    #dwellRing {
+      position: fixed;
+      pointer-events: none;
+      z-index: 9200;
+      display: none;
+    }
+    #dwellRing svg circle {
+      transition: stroke-dashoffset 0.05s linear;
+    }
+
+    /* ──────────── RESPONSIVE ──────────── */
+    @media (max-width: 640px) {
+      .level-grid { grid-template-columns: 1fr; max-width: 320px; }
+      .side-panel { flex-direction: row; width: 100%; }
+      .game-layout { flex-direction: column; align-items: center; }
+      #videoContainer { width: 160px; height: 120px; bottom: 12px; right: 12px; }
+      #gestureStatus { bottom: 140px; width: 160px; right: 12px; }
+    }
+    @media (max-width: 440px) {
+      .side-panel { display: none; }    }
+
+    /* ──────────── LOW-END MODE OPTIMIZATIONS ──────────── */
+    body.low-end .pinch-ripple { display: none; }
+    body.low-end #trailCanvas { display: none; }
+    body.low-end #handCursor .ring { box-shadow: none; }
+    body.low-end #handCursor .dot { box-shadow: none; }
+    body.low-end .board { box-shadow: 0 0 0 1px var(--border); }
+    body.low-end .tile { transition: none; }
+  </style>
+</head>
+<body>
+
+<canvas id="bgCanvas"></canvas>
+<canvas id="trailCanvas"></canvas>
+
+<div class="wrapper">
+
+  <!-- ══ LEVEL SCREEN ══ -->
+  <div id="levelScreen" class="level-screen">
+    <div class="nexus-logo">NEXUS</div>
+    <div class="nexus-sub">Hand-Control Sliding Puzzle</div>
+
+    <div class="level-grid">
+      <button class="level-card easy"   data-level="easy"   type="button">
+        <div class="card-icon">🟢</div>
+        <div class="card-name">RECRUIT</div>
+        <div class="card-grid-size">3×3</div>
+        <div class="card-desc">8 tiles · 300 shuffles</div>
+      </button>
+      <button class="level-card medium" data-level="medium" type="button">
+        <div class="card-icon">🔵</div>
+        <div class="card-name">OPERATOR</div>
+        <div class="card-grid-size">4×4</div>
+        <div class="card-desc">15 tiles · 800 shuffles</div>
+      </button>
+      <button class="level-card hard"   data-level="hard"   type="button">
+        <div class="card-icon">🔴</div>
+        <div class="card-name">PHANTOM</div>
+        <div class="card-grid-size">5×5</div>
+        <div class="card-desc">24 tiles · 1500 shuffles</div>
+      </button>
+    </div>
+  </div>
+
+  <!-- ══ GAME SCREEN ══ -->
+  <div id="gameScreen" class="game-screen hidden">
+
+    <div id="timerBar"><div id="timerBarFill" style="width:0%"></div></div>
+    <div class="hud">
+      <span class="hud-title">NEXUS</span>
+      <span class="badge" id="levelBadge">RECRUIT</span>
+
+      <div class="hud-stats">
+        <div class="stat-box">
+          <span class="stat-label">MOVES</span>
+          <span class="stat-val" id="movesVal">0</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">TIME</span>
+          <span class="stat-val" id="timeVal">0:00</span>
+        </div>
+      </div>
+
+      <div class="hud-actions">
+        <button type="button" id="handStartBtn" class="btn btn-track">📡 Hand Track</button>
+        <button type="button" id="newGameBtn"   class="btn">↺ New</button>
+        <button type="button" id="changeLevelBtn" class="btn">⊞ Level</button>
+        <button type="button" id="helpBtn"      class="btn">?</button>
+      </div>
+    </div>
+
+    <div class="game-layout">
+      <div class="board-wrap">
+        <div class="board-bracket tl"></div>
+        <div class="board-bracket tr"></div>
+        <div class="board-bracket bl"></div>
+        <div class="board-bracket br"></div>
+        <div id="board" class="board" role="grid"></div>
+      </div>
+
+      <div class="side-panel">
+        <div class="panel-box">
+          <div class="panel-label">Target</div>
+          <img id="referenceImg" alt="Target" />
+        </div>
+        <div class="panel-box">
+          <div class="panel-label">Gestures</div>
+          <div class="gesture-guide">
+            <div class="gesture-row">
+              <span class="gesture-icon">☝</span>
+              <span class="gesture-desc">Point to hover tile</span>
+            </div>
+            <div class="gesture-row">
+              <span class="gesture-icon">🤌</span>
+              <span class="gesture-desc">Pinch to slide</span>
+            </div>
+            <div class="gesture-row">
+              <span class="gesture-icon">✋</span>              <span class="gesture-desc">Open palm = idle</span>
+            </div>
+            <div class="gesture-row">
+              <span class="gesture-icon">👆</span>
+              <span class="gesture-desc">Dwell 0.8s = auto-click</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Hand tracking video window -->
+<div id="videoContainer">
+  <div class="video-hud">
+    <span class="video-hud-label">HAND-CAM</span>
+    <div id="handStatus"></div>
+  </div>
+  <video id="videoElement" autoplay playsinline muted></video>
+  <canvas id="overlay"></canvas>
+  <div class="video-metrics">
+    <div class="metric"><span class="metric-label">CONF</span><span class="metric-val" id="mConf">—</span></div>
+    <div class="metric"><span class="metric-label">PINCH</span><span class="metric-val" id="mPinch">—</span></div>
+    <div class="metric"><span class="metric-label">DWELL</span><span class="metric-val" id="mDwell">—</span></div>
+  </div>
+</div>
+
+<div id="gestureStatus">
+  <div class="g-row"><span class="g-key">STATE</span><span class="g-val" id="gState">IDLE</span></div>
+  <div class="g-row"><span class="g-key">FINGER</span><span class="g-val" id="gFinger">—</span></div>
+  <div class="g-row"><span class="g-key">ACTION</span><span class="g-val" id="gAction">NONE</span></div>
+</div>
+
+<div class="cursor-overlay">
+  <div id="handCursor">
+    <div class="ring"></div>
+    <div class="dot"></div>
+  </div>
+</div>
+
+<div id="dwellRing">
+  <svg width="50" height="50" viewBox="0 0 50 50">
+    <circle cx="25" cy="25" r="20" fill="none" stroke="rgba(0,245,255,0.2)" stroke-width="3"/>
+    <circle id="dwellArc" cx="25" cy="25" r="20" fill="none" stroke="#00f5ff" stroke-width="3"
+      stroke-dasharray="125.66" stroke-dashoffset="125.66"
+      stroke-linecap="round" transform="rotate(-90 25 25)"/>
+  </svg>
+</div>
+<div id="toastContainer"></div>
+
+<div id="winOverlay" class="win-overlay hidden">
+  <div class="win-box">
+    <div class="win-icon">⬡</div>
+    <div class="win-title">SOLVED</div>
+    <div class="win-stats">
+      <div class="win-stat-box">
+        <span class="win-stat-label">Moves</span>
+        <span class="win-stat-val" id="winMoves">—</span>
+      </div>
+      <div class="win-stat-box">
+        <span class="win-stat-label">Time</span>
+        <span class="win-stat-val" id="winTime">—</span>
+      </div>
+    </div>
+    <div class="win-actions">
+      <button type="button" id="playAgainBtn"       class="btn" style="padding:12px 28px;">▶ Play Again</button>
+      <button type="button" id="changeLevelFromWinBtn" class="btn" style="padding:12px 28px;">⊞ Levels</button>
+    </div>
+  </div>
+</div>
+
+<div id="helpOverlay" class="help-overlay hidden">
+  <div class="help-modal">
+    <div class="help-header">
+      <span class="help-title">HOW TO PLAY</span>
+      <button id="helpClose" class="help-close">×</button>
+    </div>
+    <div class="help-section-title">Objective</div>
+    <p style="color:var(--txt-dim); font-size:0.9rem; line-height:1.6;">
+      Slide tiles to restore the image. The empty cell is the destination — only tiles adjacent to it can move. Tiles must end in order (left→right, top→bottom).
+    </p>
+    <div class="help-section-title">Mouse / Touch</div>
+    <div class="help-row"><span class="help-icon">🖱️</span><span>Click / tap any tile next to the empty space to slide it.</span></div>
+    <div class="help-section-title">Hand Tracking Gestures</div>
+    <div class="help-row"><span class="help-icon">☝</span><span><strong>Point:</strong> Extend index finger. The cyan cursor follows your fingertip.</span></div>
+    <div class="help-row"><span class="help-icon">🤌</span><span><strong>Pinch:</strong> Bring thumb + index finger together to slide the hovered tile.</span></div>
+    <div class="help-row"><span class="help-icon">⏳</span><span><strong>Dwell:</strong> Hold finger still on a valid tile for ~0.8 s — auto-slides without pinching.</span></div>
+    <div class="help-row"><span class="help-icon">✋</span><span><strong>Open palm:</strong> Pauses gesture input. Useful to reposition your hand.</span></div>
+    <div class="help-section-title">Tips</div>
+    <div class="help-row"><span class="help-icon">💡</span><span>Good lighting on your hand improves detection accuracy.</span></div>
+    <div class="help-row"><span class="help-icon">💡</span><span>Press <kbd style="background:var(--bg2);padding:1px 5px;border-radius:4px;border:1px solid var(--border);">H</kbd> to toggle this help at any time.</span></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+// ══════════════ CONFIG ══════════════
+const LEVELS = { easy: 3, medium: 4, hard: 5 };
+const SHUFFLE_MOVES = { easy: 300, medium: 800, hard: 1500 };
+const BADGE_TEXT = { easy: 'RECRUIT', medium: 'OPERATOR', hard: 'PHANTOM' };
+const DWELL_TIME = 800;
+const PINCH_THRESHOLD = 0.065;
+const PINCH_COOLDOWN = 650;
+const PINCH_DEADZONE = 200; // NEW: deadzone after release
+const POINTING_THRESHOLD = 0.12;
+
+// NEW: Low-end device detection
+const LOW_END_MODE = (navigator.hardwareConcurrency || 4) < 4 || 
+                     (navigator.deviceMemory || 4) < 4 ||
+                     /Android.*(?:Mobile|Tablet)/i.test(navigator.userAgent);
+
+if (LOW_END_MODE) {
+  document.body.classList.add('low-end');
+  console.log('🔧 Low-end mode enabled for better performance');
+}
+
+const PUZZLE_IMAGES = [
+  "https://picsum.photos/id/1005/800/800",
+  "https://picsum.photos/id/1011/800/800",
+  "https://picsum.photos/id/133/800/800",
+  "https://picsum.photos/id/160/800/800",
+  "https://picsum.photos/id/201/800/800",
+  "https://picsum.photos/id/211/800/800",
+  "https://picsum.photos/id/251/800/800",
+  "https://picsum.photos/id/29/800/800",
+  "https://picsum.photos/id/30/800/800",
+  "https://picsum.photos/id/48/800/800",
+  "https://picsum.photos/id/65/800/800",
+  "https://picsum.photos/id/82/800/800",
+];
+
+const IMAGES_BY_LEVEL = { easy: [0,1,2,9], medium: [3,4,5,10], hard: [6,7,8,11] };
+
+// ══════════════ STATE ══════════════
+const state = {
+  level: 'easy', size: 3,
+  grid: [], emptyIndex: 0,
+  moves: 0, startTime: 0, timerID: null,
+  currentImageUrl: ''
+};
+
+const ht = {
+  landmarker: null,
+  isTracking: false,
+  video: null, overlay: null, ctx: null,
+  stream: null, cameraHelper: null,  hoveredIndex: -1,
+  lastPinchTime: 0,
+  pinchReleaseTime: 0, // NEW: for deadzone
+  isPinching: false,
+  isPointing: false,
+  handConf: 0,
+  pinchDist: 1,
+  dwellIndex: -1,
+  dwellStart: 0,
+  smoothX: 0, smoothY: 0,
+  SMOOTH_ALPHA: LOW_END_MODE ? 0.4 : 0.28, // Less smoothing on low-end for responsiveness
+};
+
+const trail = { pts: [], maxLen: LOW_END_MODE ? 16 : 32 };
+
+// ══════════════ UTILS ══════════════
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
+
+function toast(msg, type = '') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  $('#toastContainer').appendChild(el);
+  setTimeout(() => el.remove(), 1600);
+}
+
+function showRipple(x, y) {
+  if (LOW_END_MODE) return; // Skip visual effects on low-end
+  const r = document.createElement('div');
+  r.className = 'pinch-ripple';
+  r.style.left = x + 'px'; r.style.top = y + 'px';
+  document.body.appendChild(r);
+  setTimeout(() => r.remove(), 550);
+}
+
+// ══════════════ BACKGROUND ANIMATION (THROTTLED) ══════════════
+(function initBG() {
+  const canvas = $('#bgCanvas');
+  const ctx = canvas.getContext('2d');
+  let W, H, cells = [];
+  let lastDraw = 0;
+  const FRAME_MS = LOW_END_MODE ? 50 : 16; // 20fps vs 60fps
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+    buildGrid();
+  }
+  function buildGrid() {
+    cells = [];
+    const cols = Math.ceil(W / 60);
+    const rows = Math.ceil(H / 60);
+    for (let r = 0; r <= rows; r++) {
+      for (let c = 0; c <= cols; c++) {
+        cells.push({
+          x: c * 60, y: r * 60,
+          pulse: Math.random() * Math.PI * 2,
+          speed: 0.005 + Math.random() * 0.01,
+          bright: 0.03 + Math.random() * 0.06
+        });
+      }
+    }
+  }
+
+  let t = 0;
+  function draw(timestamp) {
+    if (timestamp - lastDraw < FRAME_MS) {
+      requestAnimationFrame(draw);
+      return;
+    }
+    lastDraw = timestamp;
+    
+    ctx.clearRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(0,245,255,0.045)';
+    ctx.lineWidth = 0.5;
+    const step = 60;
+    for (let x = 0; x <= W; x += step) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+    for (let y = 0; y <= H; y += step) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+    
+    cells.forEach(c => {
+      const a = c.bright * (0.4 + 0.6 * Math.sin(t * c.speed * 60 + c.pulse));
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(0,245,255,${a})`;
+      ctx.fill();
+    });
+    t++;
+    requestAnimationFrame(draw);
+  }
+  window.addEventListener('resize', resize);
+  resize(); 
+  requestAnimationFrame(draw);
+})();
+
+// ══════════════ TRAIL CANVAS ══════════════
+(function initTrail() {
+  const canvas = $('#trailCanvas');
+  const ctx = canvas.getContext('2d');
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  function drawTrail() {
+    if (!LOW_END_MODE && ht.isTracking && trail.pts.length > 1) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = 1; i < trail.pts.length; i++) {
+        const alpha = (i / trail.pts.length) * 0.55;
+        const width = (i / trail.pts.length) * 3;
+        ctx.beginPath();
+        ctx.strokeStyle = `rgba(0,245,255,${alpha})`;
+        ctx.lineWidth = width;
+        ctx.lineCap = 'round';
+        ctx.moveTo(trail.pts[i - 1].x, trail.pts[i - 1].y);
+        ctx.lineTo(trail.pts[i].x, trail.pts[i].y);
+        ctx.stroke();
+      }
+    }
+    requestAnimationFrame(drawTrail);
+  }
+  drawTrail();
+})();
+
+// ══════════════ PUZZLE LOGIC ══════════════
+function getNeighbors(idx, size) {
+  const row = Math.floor(idx / size), col = idx % size;
+  const n = [];
+  if (row > 0)       n.push(idx - size);
+  if (row < size-1)  n.push(idx + size);
+  if (col > 0)       n.push(idx - 1);
+  if (col < size-1)  n.push(idx + 1);
+  return n;
+}
+
+function isAdjacentToEmpty(idx) {
+  return getNeighbors(state.emptyIndex, state.size).includes(idx);
+}
+
+function createSolvablePuzzle(size) {
+  let grid = Array.from({ length: size * size - 1 }, (_, i) => i + 1);
+  grid.push(0);
+  let emptyIdx = size * size - 1;
+  const moves = SHUFFLE_MOVES[state.level] || 500;
+  for (let i = 0; i < moves; i++) {
+    const n = getNeighbors(emptyIdx, size);    const next = n[Math.floor(Math.random() * n.length)];
+    [grid[emptyIdx], grid[next]] = [grid[next], grid[emptyIdx]];
+    emptyIdx = next;
+  }
+  return { grid, emptyIdx };
+}
+
+function checkWin() {
+  for (let i = 0; i < state.grid.length - 1; i++) {
+    if (state.grid[i] !== i + 1) return false;
+  }
+  return state.grid[state.grid.length - 1] === 0;
+}
+
+function moveTile(idx, fromHand = false) {
+  if (!isAdjacentToEmpty(idx)) return false;
+  [state.grid[state.emptyIndex], state.grid[idx]] = [state.grid[idx], state.grid[state.emptyIndex]];
+  state.emptyIndex = idx;
+  state.moves++;
+  render();
+  const tileEl = $(`[data-index="${state.emptyIndex}"]`);
+  if (tileEl && fromHand && !LOW_END_MODE) {
+    tileEl.classList.add('pinch-flash');
+    setTimeout(() => tileEl.classList.remove('pinch-flash'), 350);
+  }
+  if (checkWin()) triggerWin();
+  return true;
+}
+
+function triggerWin() {
+  clearInterval(state.timerID);
+  const elapsed = Math.floor((Date.now() - state.startTime) / 1000);
+  const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+  const ss = String(elapsed % 60).padStart(2, '0');
+  $('#winMoves').textContent = state.moves;
+  $('#winTime').textContent = `${mm}:${ss}`;
+  $('#winOverlay').classList.remove('hidden');
+  toast('✦ PUZZLE SOLVED ✦', 'success');
+}
+
+function startNewGame() {
+  state.size = LEVELS[state.level];
+  const pool = IMAGES_BY_LEVEL[state.level];
+  state.currentImageUrl = PUZZLE_IMAGES[pool[Math.floor(Math.random() * pool.length)]];
+  const { grid, emptyIdx } = createSolvablePuzzle(state.size);
+  state.grid = grid;
+  state.emptyIndex = emptyIdx;
+  state.moves = 0;
+  clearInterval(state.timerID);
+  state.startTime = Date.now();  startTimer();
+  $('#referenceImg').src = state.currentImageUrl;
+  $('#winOverlay').classList.add('hidden');
+  ht.hoveredIndex = -1;
+  ht.dwellIndex = -1;
+  render();
+  toast('New game started');
+}
+
+function startTimer() {
+  state.timerID = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - state.startTime) / 1000);
+    const mm = Math.floor(elapsed / 60);
+    const ss = String(elapsed % 60).padStart(2, '0');
+    $('#timeVal').textContent = `${mm}:${ss}`;
+  }, 500);
+}
+
+function render() {
+  const board = $('#board');
+  board.className = `board size-${state.size}`;
+  board.innerHTML = '';
+  $('#movesVal').textContent = state.moves;
+
+  for (let i = 0; i < state.grid.length; i++) {
+    const val = state.grid[i];
+    const tile = document.createElement('div');
+    tile.dataset.index = i;
+
+    if (val === 0) {
+      tile.className = 'tile empty';
+    } else {
+      tile.className = 'tile tile-image';
+      const pIdx = val - 1;
+      const row = Math.floor(pIdx / state.size);
+      const col = pIdx % state.size;
+      tile.style.backgroundImage = `url(${state.currentImageUrl})`;
+      tile.style.backgroundSize  = `${state.size * 100}% ${state.size * 100}%`;
+      tile.style.backgroundPosition = `${(col * 100) / (state.size - 1)}% ${(row * 100) / (state.size - 1)}%`;
+
+      const num = document.createElement('span');
+      num.className = 'tile-num';
+      num.textContent = val;
+      tile.appendChild(num);
+
+      tile.addEventListener('click', () => moveTile(i));
+    }
+
+    if (i === ht.hoveredIndex && val !== 0) tile.classList.add('hovered');
+    if (i === ht.hoveredIndex && isAdjacentToEmpty(i)) tile.classList.add('valid-hover');
+    board.appendChild(tile);
+  }
+}
+
+// ══════════════ HAND TRACKING ══════════════
+
+function updateCursor(screenX, screenY, isValid, isPinching) {
+  ht.smoothX += ht.SMOOTH_ALPHA * (screenX - ht.smoothX);
+  ht.smoothY += ht.SMOOTH_ALPHA * (screenY - ht.smoothY);
+
+  const cursor = $('#handCursor');
+  cursor.style.left = ht.smoothX + 'px';
+  cursor.style.top  = ht.smoothY + 'px';
+  cursor.classList.add('active');
+  cursor.classList.toggle('valid', isValid);
+  cursor.classList.toggle('pinching', isPinching);
+
+  if (!LOW_END_MODE) {
+    trail.pts.push({ x: ht.smoothX, y: ht.smoothY });
+    if (trail.pts.length > trail.maxLen) trail.pts.shift();
+  }
+}
+
+function hideCursor() {
+  $('#handCursor').classList.remove('active', 'valid', 'pinching');
+  trail.pts = [];
+}
+
+function updateDwellRing(screenX, screenY, progress) {
+  const ring = $('#dwellRing');
+  const arc  = $('#dwellArc');
+  const circumference = 125.66;
+  if (progress <= 0 || progress >= 1) {
+    ring.style.display = 'none';
+    return;
+  }
+  ring.style.display = 'block';
+  ring.style.left = (screenX - 25) + 'px';
+  ring.style.top  = (screenY - 25) + 'px';
+  arc.style.strokeDashoffset = circumference * (1 - progress);
+  const hue = Math.floor(progress * 120);
+  arc.setAttribute('stroke', `hsl(${hue},100%,60%)`);
+}
+
+function isIndexPointing(landmarks) {
+  const indexTip = landmarks[8];
+  const indexPip = landmarks[6];
+  const indexExtended = indexTip.y < indexPip.y - POINTING_THRESHOLD;
+  return indexExtended;}
+
+function drawHandOverlay(results) {
+  if (!ht.overlay || !ht.ctx) return;
+  const rect = ht.video.getBoundingClientRect();
+  if (ht.overlay.width !== Math.round(rect.width) || ht.overlay.height !== Math.round(rect.height)) {
+    ht.overlay.width  = Math.round(rect.width);
+    ht.overlay.height = Math.round(rect.height);
+  }
+  const ctx = ht.ctx;
+  ctx.clearRect(0, 0, ht.overlay.width, ht.overlay.height);
+
+  if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
+
+  const landmarks = results.multiHandLandmarks[0];
+  const W = ht.overlay.width, H = ht.overlay.height;
+  const pts = landmarks.map(l => ({ x: l.x * W, y: l.y * H }));
+
+  if (typeof HAND_CONNECTIONS !== 'undefined') {
+    ctx.save();
+    ctx.shadowBlur = LOW_END_MODE ? 4 : 12;
+    ctx.shadowColor = '#00f5ff';
+    ctx.strokeStyle = 'rgba(0,245,255,0.8)';
+    ctx.lineWidth = LOW_END_MODE ? 1 : 2;
+    HAND_CONNECTIONS.forEach(([a, b]) => {
+      ctx.beginPath();
+      ctx.moveTo(pts[a].x, pts[a].y);
+      ctx.lineTo(pts[b].x, pts[b].y);
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  pts.forEach((p, i) => {
+    const isKey = [4, 8].includes(i);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, isKey ? 5 : 3, 0, Math.PI * 2);
+    ctx.fillStyle = isKey ? '#ffffff' : 'rgba(0,245,255,0.7)';
+    if (isKey && !LOW_END_MODE) {
+      ctx.shadowBlur = 10; ctx.shadowColor = '#fff';
+    }
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  });
+
+  const thumbPt = pts[4], indexPt = pts[8];
+  const dist = Math.hypot(thumbPt.x - indexPt.x, thumbPt.y - indexPt.y) / W;
+  const pinchPct = Math.max(0, 1 - dist / PINCH_THRESHOLD);
+
+  ctx.save();  ctx.setLineDash([4, 4]);
+  ctx.strokeStyle = `rgba(57,255,20,${0.3 + pinchPct * 0.7})`;
+  ctx.lineWidth = 1.5;
+  ctx.shadowBlur = pinchPct * (LOW_END_MODE ? 6 : 16); ctx.shadowColor = '#39ff14';
+  ctx.beginPath();
+  ctx.moveTo(thumbPt.x, thumbPt.y);
+  ctx.lineTo(indexPt.x, indexPt.y);
+  ctx.stroke();
+  ctx.restore();
+
+  $('#mConf').textContent  = (ht.handConf * 100).toFixed(0) + '%';
+  $('#mPinch').textContent = (dist * 100).toFixed(1);
+  $('#mDwell').textContent = ht.dwellIndex !== -1 ? '●' : '—';
+}
+
+async function initHandTracking() {
+  if (typeof Hands === 'undefined') {
+    await new Promise(resolve => {
+      const interval = setInterval(() => {
+        if (typeof Hands !== 'undefined') { clearInterval(interval); resolve(); }
+      }, 100);
+      setTimeout(() => { clearInterval(interval); resolve(); }, 5000);
+    });
+  }
+
+  if (typeof Hands === 'undefined') {
+    toast('MediaPipe failed to load. Check your connection.', 'warn');
+    return false;
+  }
+
+  const hands = new Hands({
+    locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+  });
+
+  hands.setOptions({
+    maxNumHands: 1,
+    modelComplexity: LOW_END_MODE ? 0 : 1, // Use lighter model on low-end
+    minDetectionConfidence: 0.65,
+    minTrackingConfidence: 0.60
+  });
+
+  hands.onResults(results => {
+    if (!ht.isTracking) return;
+    drawHandOverlay(results);
+
+    const handPresent = results.multiHandLandmarks && results.multiHandLandmarks.length > 0;
+    $('#handStatus').classList.toggle('on', handPresent);
+    $('#videoContainer').classList.toggle('hand-detected', handPresent);
+
+    if (!handPresent) {      ht.isPointing = false;
+      ht.hoveredIndex = -1;
+      ht.dwellIndex = -1;
+      hideCursor();
+      updateHoverClasses();
+      updateDwellRing(0, 0, 0);
+      updateGestureHUD('IDLE', '—', 'NO HAND');
+      return;
+    }
+
+    ht.handConf = results.multiHandedness?.[0]?.score ?? 1;
+    processLandmarks(results.multiHandLandmarks[0]);
+  });
+
+  ht.landmarker = hands;
+  return true;
+}
+
+// function processLandmarks(landmarks) {
+//   // NEW: Deadzone check to prevent double-triggers
+//   if (Date.now() - ht.pinchReleaseTime < PINCH_DEADZONE) return;
+
+//   const indexTip  = landmarks[8];
+//   const thumbTip  = landmarks[4];
+
+//   ht.isPointing = isIndexPointing(landmarks);
+
+//   const videoEl = ht.video;
+//   const vRect   = videoEl.getBoundingClientRect();
+//   const rawX = (1 - indexTip.x) * vRect.width  + vRect.left;
+//   const rawY = indexTip.y        * vRect.height + vRect.top;
+
+//   const pdx = indexTip.x - thumbTip.x;
+//   const pdy = indexTip.y - thumbTip.y;
+//   ht.pinchDist = Math.sqrt(pdx * pdx + pdy * pdy);
+//   const pinchActive = ht.pinchDist < PINCH_THRESHOLD;
+
+//   $('#videoContainer').classList.toggle('pinching', pinchActive);
+
+//   const board = $('#board');
+//   const bRect = board.getBoundingClientRect();
+//   let newHovered = -1;
+
+//   if (rawX >= bRect.left && rawX <= bRect.right &&
+//       rawY >= bRect.top  && rawY <= bRect.bottom) {
+//     const relX = (rawX - bRect.left) / bRect.width;
+//     const relY = (rawY - bRect.top)  / bRect.height;
+//     const col  = Math.floor(Math.min(0.9999, relX) * state.size);
+//     const row  = Math.floor(Math.min(0.9999, relY) * state.size);
+//     const idx  = row * state.size + col;    if (state.grid[idx] !== 0) newHovered = idx;
+//   }
+
+//   if (newHovered !== ht.hoveredIndex) {
+//     ht.hoveredIndex = newHovered;
+//     ht.dwellIndex   = -1;
+//     ht.dwellStart   = 0;
+//     updateHoverClasses();
+//   }
+
+//   const isValidHover = newHovered !== -1 && isAdjacentToEmpty(newHovered);
+//   updateCursor(rawX, rawY, isValidHover, pinchActive);
+
+//   // ── DWELL MECHANIC ──
+//   if (isValidHover && ht.isPointing && !pinchActive) {
+//     if (ht.dwellIndex !== newHovered) {
+//       ht.dwellIndex = newHovered;
+//       ht.dwellStart = Date.now();
+//     }
+//     const dwellProg = (Date.now() - ht.dwellStart) / DWELL_TIME;
+//     updateDwellRing(rawX, rawY, dwellProg);
+
+//     if (dwellProg >= 1) {
+//       const now = Date.now();
+//       if (now - ht.lastPinchTime > PINCH_COOLDOWN) {
+//         ht.lastPinchTime = now;
+//         ht.dwellIndex = -1;
+//         ht.dwellStart = 0;
+//         moveTile(newHovered, true);
+//         showRipple(rawX, rawY);
+//         updateDwellRing(0, 0, 0);
+//         updateGestureHUD('DWELL', `TILE ${newHovered}`, 'SLID');
+//         toast('↔ Dwell-slide', 'success');
+//       }
+//     }
+//   } else {
+//     ht.dwellIndex = -1;
+//     updateDwellRing(0, 0, 0);
+//   }
+
+//   // ── PINCH MECHANIC with deadzone ──
+//   if (pinchActive && !ht.isPinching) {
+//     ht.isPinching = true;
+//     const now = Date.now();
+//     if (now - ht.lastPinchTime > PINCH_COOLDOWN && isValidHover) {
+//       ht.lastPinchTime = now;
+//       moveTile(newHovered, true);
+//       showRipple(rawX, rawY);
+//       updateGestureHUD('PINCH', `TILE ${newHovered}`, 'SLID ✓');
+//       toast('✓ Pinch-slide', 'success');    }
+//   } else if (!pinchActive) {
+//     ht.isPinching = false;
+//     ht.pinchReleaseTime = Date.now(); // NEW: mark release time for deadzone
+//   }
+
+//   const stateStr = pinchActive ? 'PINCHING' : (ht.isPointing ? 'POINTING' : 'OPEN');
+//   const fingerStr = `(${(indexTip.x * 100).toFixed(0)}, ${(indexTip.y * 100).toFixed(0)})`;
+//   const actionStr = isValidHover ? 'VALID TARGET' : (newHovered !== -1 ? 'NOT ADJACENT' : 'OUT OF BOARD');
+//   updateGestureHUD(stateStr, fingerStr, actionStr);}
+function processLandmarks(landmarks) {
+  // Deadzone check
+  if (Date.now() - ht.pinchReleaseTime < PINCH_DEADZONE) return;
+
+  const indexTip  = landmarks[8];
+  const thumbTip  = landmarks[4];
+
+  ht.isPointing = isIndexPointing(landmarks);
+
+  // ✅ FIXED: Map finger position to BOARD, not video window
+  const board = $('#board');
+  const bRect = board.getBoundingClientRect();
+  
+  // Map normalized video coordinates (0-1) directly to board position
+  // This makes the video frame act like a touchpad for the board
+  const rawX = bRect.left + (indexTip.x * bRect.width);
+  const rawY = bRect.top + (indexTip.y * bRect.height);
+
+  // Calculate pinch distance
+  const pdx = indexTip.x - thumbTip.x;
+  const pdy = indexTip.y - thumbTip.y;
+  ht.pinchDist = Math.sqrt(pdx * pdx + pdy * pdy);
+  const pinchActive = ht.pinchDist < PINCH_THRESHOLD;
+
+  $('#videoContainer').classList.toggle('pinching', pinchActive);
+
+  // Find hovered tile
+  let newHovered = -1;
+  const relX = indexTip.x; // Already 0-1 from video
+  const relY = indexTip.y;
+  
+  // Check if finger is roughly in frame (not out of camera view)
+  if (relX >= 0 && relX <= 1 && relY >= 0 && relY <= 1) {
+    const col  = Math.floor(Math.min(0.9999, relX) * state.size);
+    const row  = Math.floor(Math.min(0.9999, relY) * state.size);
+    const idx  = row * state.size + col;
+    if (idx >= 0 && idx < state.grid.length && state.grid[idx] !== 0) {
+      newHovered = idx;
+    }
+  }
+
+  // Update hover state
+  if (newHovered !== ht.hoveredIndex) {
+    ht.hoveredIndex = newHovered;
+    ht.dwellIndex   = -1;
+    ht.dwellStart   = 0;
+    updateHoverClasses();
+  }
+
+  const isValidHover = newHovered !== -1 && isAdjacentToEmpty(newHovered);  
+  // Update cursor position (for visual feedback)
+  updateCursor(rawX, rawY, isValidHover, pinchActive);
+
+  // DWELL MECHANIC
+  if (isValidHover && ht.isPointing && !pinchActive) {
+    if (ht.dwellIndex !== newHovered) {
+      ht.dwellIndex = newHovered;
+      ht.dwellStart = Date.now();
+    }
+    const dwellProg = (Date.now() - ht.dwellStart) / DWELL_TIME;
+    updateDwellRing(rawX, rawY, dwellProg);
+
+    if (dwellProg >= 1) {
+      const now = Date.now();
+      if (now - ht.lastPinchTime > PINCH_COOLDOWN) {
+        ht.lastPinchTime = now;
+        ht.dwellIndex = -1;
+        ht.dwellStart = 0;
+        moveTile(newHovered, true);
+        showRipple(rawX, rawY);
+        updateDwellRing(0, 0, 0);
+        updateGestureHUD('DWELL', `TILE ${newHovered}`, 'SLID');
+        toast('↔ Dwell-slide', 'success');
+      }
+    }
+  } else {
+    ht.dwellIndex = -1;
+    updateDwellRing(0, 0, 0);
+  }
+
+  // PINCH MECHANIC
+  if (pinchActive && !ht.isPinching) {
+    ht.isPinching = true;
+    const now = Date.now();
+    if (now - ht.lastPinchTime > PINCH_COOLDOWN && isValidHover) {
+      ht.lastPinchTime = now;
+      moveTile(newHovered, true);
+      showRipple(rawX, rawY);
+      updateGestureHUD('PINCH', `TILE ${newHovered}`, 'SLID ✓');
+      toast('✓ Pinch-slide', 'success');
+    }
+  } else if (!pinchActive) {
+    ht.isPinching = false;
+    ht.pinchReleaseTime = Date.now();
+  }
+
+  // Update HUD
+  const stateStr = pinchActive ? 'PINCHING' : (ht.isPointing ? 'POINTING' : 'OPEN');
+  const fingerStr = `(${(indexTip.x * 100).toFixed(0)}, ${(indexTip.y * 100).toFixed(0)})`;  const actionStr = isValidHover ? 'VALID TARGET' : (newHovered !== -1 ? 'NOT ADJACENT' : 'OUT OF BOARD');
+  updateGestureHUD(stateStr, fingerStr, actionStr);
+}
+
+function updateGestureHUD(s, f, a) {
+  $('#gState').textContent  = s;
+  $('#gFinger').textContent = f;
+  $('#gAction').textContent = a;
+  $('#gState').className  = 'g-val' + (s === 'PINCHING' || s === 'DWELL' ? ' hot' : '');
+  $('#gAction').className = 'g-val' + (a.includes('VALID') ? ' hot' : a.includes('NO') ? ' warn' : '');
+}
+
+function updateHoverClasses() {
+  $$('.tile').forEach(tile => {
+    const idx = parseInt(tile.dataset.index);
+    tile.classList.toggle('hovered',     idx === ht.hoveredIndex && !tile.classList.contains('empty'));
+    tile.classList.toggle('valid-hover', idx === ht.hoveredIndex && isAdjacentToEmpty(idx));
+  });
+}
+
+// ══════════════ TOUCH FALLBACK ══════════════
+function initTouchFallback() {
+  const board = $('#board');
+  let touchStartPos = null;
+
+  board.addEventListener('touchstart', (e) => {
+    if (ht.isTracking) return; // Only use touch if hand tracking is OFF
+    touchStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }, {passive: true});
+
+  board.addEventListener('touchend', (e) => {
+    if (ht.isTracking || !touchStartPos) return;
+    
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - touchStartPos.x;
+    const dy = touch.clientY - touchStartPos.y;
+    
+    // Tap detection (not swipe)
+    if (Math.abs(dx) < 15 && Math.abs(dy) < 15) {
+      const rect = board.getBoundingClientRect();
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;      const col = Math.floor((x / rect.width) * state.size);
+      const row = Math.floor((y / rect.height) * state.size);
+      const idx = row * state.size + col;
+      
+      if (idx >= 0 && idx < state.grid.length) {
+        moveTile(idx);
+      }
+    }
+    touchStartPos = null;
+  }, {passive: true});
+}
+
+// ══════════════ KEYBOARD SHORTCUTS ══════════════
+function initKeyboardShortcuts() {
+  document.addEventListener('keydown', (e) => {
+    if (!ht.isTracking) return; // Only when hand tracking is active
+    
+    const emptyRow = Math.floor(state.emptyIndex / state.size);
+    const emptyCol = state.emptyIndex % state.size;
+    let targetIdx = -1;
+    
+    switch(e.key) {
+      case 'ArrowUp':    
+        if (emptyRow < state.size - 1) targetIdx = state.emptyIndex + state.size; 
+        break;
+      case 'ArrowDown':  
+        if (emptyRow > 0) targetIdx = state.emptyIndex - state.size; 
+        break;
+      case 'ArrowLeft':  
+        if (emptyCol < state.size - 1) targetIdx = state.emptyIndex + 1; 
+        break;
+      case 'ArrowRight': 
+        if (emptyCol > 0) targetIdx = state.emptyIndex - 1; 
+        break;
+    }
+    
+    if (targetIdx !== -1 && targetIdx >= 0 && targetIdx < state.grid.length) {
+      moveTile(targetIdx, true);
+      if (!LOW_END_MODE) showRipple(window.innerWidth/2, window.innerHeight/2);
+    }
+  });
+}
+
+async function startHandTracking() {
+  try {
+    if (ht.stream) ht.stream.getTracks().forEach(t => t.stop());
+
+    ht.stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+    });
+    ht.video = $('#videoElement');
+    ht.video.srcObject = ht.stream;
+    await ht.video.play();
+
+    ht.overlay = $('#overlay');
+    ht.ctx = ht.overlay.getContext('2d');
+
+    const rect = ht.video.getBoundingClientRect();
+    ht.overlay.width  = Math.max(rect.width, 1);
+    ht.overlay.height = Math.max(rect.height, 1);
+
+    $('#videoContainer').classList.add('show');
+    $('#gestureStatus').style.display = 'block';
+
+    if (typeof Camera !== 'undefined') {
+      ht.cameraHelper = new Camera(ht.video, {
+        onFrame: async () => {
+          if (ht.landmarker && ht.isTracking) await ht.landmarker.send({ image: ht.video });
+        },
+        width: 640, height: 480
+      });
+      ht.cameraHelper.start();
+    } else {
+      (function sendFrame() {
+        if (ht.isTracking && ht.landmarker && ht.video.readyState >= 2) {
+          ht.landmarker.send({ image: ht.video });
+        }
+        if (ht.isTracking) requestAnimationFrame(sendFrame);
+      })();
+    }
+
+    ht.isTracking = true;
+    toast('Hand tracking active', 'success');
+    updateGestureHUD('READY', '—', 'SHOW HAND');
+
+  } catch (err) {
+    console.error('Camera error:', err);
+    toast('Camera access failed. Allow permissions & use HTTPS.', 'warn');
+    $('#handStartBtn').textContent = '↺ Retry';
+    $('#handStartBtn').classList.remove('active');
+  }
+}
+
+function stopHandTracking() {
+  ht.isTracking = false;
+  if (ht.cameraHelper) { try { ht.cameraHelper.stop(); } catch(e){} ht.cameraHelper = null; }
+  if (ht.stream) { ht.stream.getTracks().forEach(t => t.stop()); ht.stream = null; }
+  $('#videoContainer').classList.remove('show', 'hand-detected', 'pinching');
+  $('#gestureStatus').style.display = 'none';  ht.hoveredIndex = -1;
+  ht.dwellIndex = -1;
+  updateHoverClasses();
+  hideCursor();
+  updateDwellRing(0, 0, 0);
+}
+
+// ══════════════ NAVIGATION ══════════════
+function startGame(level) {
+  state.level = level;
+  $('#levelScreen').classList.add('hidden');
+  $('#gameScreen').classList.remove('hidden');
+  const badge = $('#levelBadge');
+  badge.textContent = BADGE_TEXT[level];
+  badge.className = `badge badge-${level}`;
+  startNewGame();
+}
+
+function goToLevelScreen() {
+  stopHandTracking();
+  clearInterval(state.timerID);
+  $('#gameScreen').classList.add('hidden');
+  $('#winOverlay').classList.add('hidden');
+  $('#levelScreen').classList.remove('hidden');
+}
+
+// ══════════════ BOOT ══════════════
+document.addEventListener('DOMContentLoaded', async () => {
+  // Initialize accessibility features
+  initTouchFallback();
+  initKeyboardShortcuts();
+
+  // Level buttons
+  $$('.level-card').forEach(btn => {
+    btn.addEventListener('click', () => startGame(btn.dataset.level));
+  });
+
+  // Hand tracking button
+  $('#handStartBtn').addEventListener('click', async () => {
+    if (!ht.isTracking) {
+      $('#handStartBtn').textContent = '⏳ Loading...';
+      const ready = await initHandTracking();
+      if (ready) {
+        await startHandTracking();
+        $('#handStartBtn').textContent = '■ Stop Track';
+        $('#handStartBtn').classList.add('active');
+      } else {
+        $('#handStartBtn').textContent = '📡 Hand Track';
+      }
+    } else {      stopHandTracking();
+      $('#handStartBtn').textContent = '📡 Hand Track';
+      $('#handStartBtn').classList.remove('active');
+    }
+  });
+
+  $('#newGameBtn').addEventListener('click', startNewGame);
+  $('#changeLevelBtn').addEventListener('click', goToLevelScreen);
+
+  $('#playAgainBtn').addEventListener('click', () => {
+    $('#winOverlay').classList.add('hidden');
+    startNewGame();
+  });
+  $('#changeLevelFromWinBtn').addEventListener('click', goToLevelScreen);
+
+  // Help
+  const showHelp = () => $('#helpOverlay').classList.remove('hidden');
+  const hideHelp = () => $('#helpOverlay').classList.add('hidden');
+  $('#helpBtn').addEventListener('click', showHelp);
+  $('#helpClose').addEventListener('click', hideHelp);
+  $('#helpOverlay').addEventListener('click', e => { if (e.target.id === 'helpOverlay') hideHelp(); });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'h' || e.key === 'H') showHelp();
+    if (e.key === 'Escape') { hideHelp(); $('#winOverlay').classList.add('hidden'); }
+  });
+
+  if (!localStorage.getItem('nexusHelpShown')) {
+    setTimeout(showHelp, 1200);
+    localStorage.setItem('nexusHelpShown', 'true');
+  }
+
+  // Resize: update overlay canvas
+  window.addEventListener('resize', () => {
+    if (ht.overlay && ht.video) {
+      const rect = ht.video.getBoundingClientRect();
+      ht.overlay.width  = Math.max(Math.round(rect.width), 1);
+      ht.overlay.height = Math.max(Math.round(rect.height), 1);
+    }
+  });
+});
+
+window.addEventListener('beforeunload', stopHandTracking);
+</script>
+</body>
+</html>
