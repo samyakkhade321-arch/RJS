@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCI-FI VOICE STOPWATCH | Start / End</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', 'Orbitron', 'Segoe UI', monospace;
+            background: radial-gradient(circle at 20% 50%, #0a0a2a, #000000);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #00ffff;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Sci-fi grid background */
+        body::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(0, 255, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 255, 0.05) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+        }
+
+        /* Animated scanline */
+        body::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                transparent 50%,
+                rgba(0, 255, 255, 0.03) 50%
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            animation: scanline 10s linear infinite;
+        }
+
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100%); }
+        }
+
+        .container {
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(15px);
+            border-radius: 20px;
+            padding: 50px;
+            text-align: center;
+            box-shadow: 
+                0 0 30px rgba(0, 255, 255, 0.3),
+                inset 0 0 30px rgba(0, 255, 255, 0.05);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            z-index: 1;
+            min-width: 600px;
+            animation: fadeIn 1s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        h1 {
+            font-family: 'Orbitron', 'Courier New', monospace;
+            font-size: 2rem;
+            letter-spacing: 4px;
+            text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
+            margin-bottom: 20px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff; }
+            50% { text-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff; }
+        }
+
+        .stopwatch {
+            font-size: 4.5rem;
+            font-weight: bold;
+            font-family: 'Orbitron', 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            letter-spacing: 8px;
+            border: 1px solid #00ffff;
+            box-shadow: 
+                0 0 20px rgba(0, 255, 255, 0.2),
+                inset 0 0 15px rgba(0, 255, 255, 0.1);
+            text-shadow: 0 0 5px #00ffff;
+        }
+
+        .status {
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+            padding: 12px;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            border-left: 3px solid #00ffff;
+            font-family: 'Orbitron', monospace;
+            letter-spacing: 2px;
+        }
+
+        .voice-status {
+            font-size: 1rem;
+            margin-bottom: 20px;
+            padding: 12px;
+            border-radius: 10px;
+            background: rgba(0, 255, 255, 0.05);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            font-family: monospace;
+        }
+
+        button {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid #00ffff;
+            color: #00ffff;
+            padding: 12px 28px;
+            margin: 10px;
+            font-size: 1.1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+            font-family: 'Orbitron', monospace;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        button:hover {
+            background: rgba(0, 255, 255, 0.2);
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+            transform: translateY(-2px);
+            border-color: #00ffff;
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .reset-btn {
+            border-color: #ff00ff;
+            color: #ff00ff;
+            box-shadow: 0 0 5px rgba(255, 0, 255, 0.3);
+        }
+
+        .reset-btn:hover {
+            background: rgba(255, 0, 255, 0.2);
+            box-shadow: 0 0 15px rgba(255, 0, 255, 0.5);
+        }
+
+        .mic-btn {
+            border-color: #00ff00;
+            color: #00ff00;
+            box-shadow: 0 0 5px rgba(0, 255, 0, 0.3);
+        }
+
+        .mic-btn:hover {
+            background: rgba(0, 255, 0, 0.2);
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
+        }
+
+        .mic-btn.listening {
+            background: rgba(255, 0, 0, 0.3);
+            border-color: #ff0000;
+            color: #ff0000;
+            animation: blink 1s infinite;
+            box-shadow: 0 0 15px rgba(255, 0, 0, 0.5);
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .command-hint {
+            margin-top: 25px;
+            font-size: 0.85rem;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(0, 255, 255, 0.2);
+        }
+
+        .command-hint p {
+            margin: 8px 0;
+        }
+
+        .highlight {
+            color: #00ffff;
+            font-weight: bold;
+            text-shadow: 0 0 5px #00ffff;
+            letter-spacing: 1px;
+        }
+
+        .sci-fi-icon {
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        /* Glowing dots animation */
+        @keyframes glowPulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+
+        .status-led {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #00ffff;
+            margin-right: 8px;
+            animation: glowPulse 1.5s infinite;
+            box-shadow: 0 0 5px #00ffff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>
+            <span class="sci-fi-icon">⟁</span> VOICE STOPWATCH <span class="sci-fi-icon">⟁</span>
+        </h1>
+        <div class="stopwatch" id="stopwatch">00:00:00.00</div>
+        <div class="status" id="status">
+            <span class="status-led"></span> SYSTEM: STANDBY
+        </div>
+        <div class="voice-status" id="voiceStatus">
+            🎙️ VOICE MODULE: INACTIVE | INITIATE MICROPHONE
+        </div>
+        
+        <div>
+            <button class="mic-btn" id="micBtn">🎤 ACTIVATE VOICE CONTROL</button>
+            <button class="reset-btn" id="resetBtn">⟲ SYSTEM RESET</button>
+        </div>
+
+        <div class="command-hint">
+            <p>🎯 <span class="highlight">VOICE COMMANDS</span> — SPEAK CLEARLY</p>
+            <p>▶️ "<span class="highlight">START</span>" — INITIATE TIMER</p>
+            <p>⏹️ "<span class="highlight">END</span>" — TERMINATE TIMER</p>
+            <p>🔄 "<span class="highlight">RESET</span>" — RETURN TO ZERO</p>
+            <p class="sci-fi-icon">⚡ TACTICAL FEEDBACK ACTIVE ⚡</p>
+        </div>
+    </div>
+
+    <script>
+        class VoiceStopwatch {
+            constructor() {
+                this.startTime = 0;
+                this.running = false;
+                this.elapsedTime = 0;
+                this.timerInterval = null;
+                this.recognition = null;
+                this.isListening = false;
+                
+                this.initElements();
+                this.initEventListeners();
+                this.initSpeechRecognition();
+            }
+
+            initElements() {
+                this.stopwatchDisplay = document.getElementById('stopwatch');
+                this.statusDisplay = document.getElementById('status');
+                this.voiceStatusDisplay = document.getElementById('voiceStatus');
+                this.micBtn = document.getElementById('micBtn');
+                this.resetBtn = document.getElementById('resetBtn');
+            }
+
+            initEventListeners() {
+                this.resetBtn.addEventListener('click', () => this.reset());
+                this.micBtn.addEventListener('click', () => this.toggleVoiceControl());
+            }
+
+            initSpeechRecognition() {
+                if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                    this.voiceStatusDisplay.innerHTML = '⚠️ ERROR: SPEECH MODULE NOT SUPPORTED | USE CHROME/EDGE';
+                    this.micBtn.disabled = true;
+                    return;
+                }
+
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                this.recognition = new SpeechRecognition();
+                this.recognition.continuous = true;
+                this.recognition.interimResults = false;
+                this.recognition.lang = 'en-US';
+
+                this.recognition.onstart = () => {
+                    this.isListening = true;
+                    this.micBtn.classList.add('listening');
+                    this.micBtn.textContent = '🎤 VOICE MODULE: ACTIVE';
+                    this.voiceStatusDisplay.innerHTML = '🎧 VOICE MODULE: ONLINE | AWAITING COMMANDS: "START", "END", "RESET"';
+                };
+
+                this.recognition.onend = () => {
+                    this.isListening = false;
+                    this.micBtn.classList.remove('listening');
+                    this.micBtn.textContent = '🎤 ACTIVATE VOICE CONTROL';
+                    this.voiceStatusDisplay.innerHTML = '🎙️ VOICE MODULE: OFFLINE | REACTIVATE TO CONTINUE';
+                    
+                    if (this.shouldRestart) {
+                        this.startListening();
+                    }
+                };
+
+                this.recognition.onresult = (event) => {
+                    const last = event.results.length - 1;
+                    const command = event.results[last][0].transcript.toLowerCase().trim();
+                    console.log('Voice input detected:', command);
+                    this.processCommand(command);
+                };
+
+                this.recognition.onerror = (event) => {
+                    console.error('Voice system error:', event.error);
+                    if (event.error === 'not-allowed') {
+                        this.voiceStatusDisplay.innerHTML = '❌ ERROR: MICROPHONE ACCESS DENIED | CHECK PERMISSIONS';
+                    } else {
+                        this.voiceStatusDisplay.innerHTML = `⚠️ SYSTEM ERROR: ${event.error.toUpperCase()}`;
+                    }
+                };
+            }
+
+            processCommand(command) {
+                // Check for START command
+                if (command === "start" || command.startsWith("start ") || 
+                    command.includes("start") && command.length < 10) {
+                    if (!this.running) {
+                        this.start();
+                        this.voiceStatusDisplay.innerHTML = '✅ COMMAND ACCEPTED: "START" | TIMER INITIATED';
+                        setTimeout(() => {
+                            if (this.isListening) 
+                                this.voiceStatusDisplay.innerHTML = '🎧 VOICE MODULE: ONLINE | AWAITING COMMANDS';
+                        }, 2500);
+                    } else {
+                        this.voiceStatusDisplay.innerHTML = '⚠️ ERROR: TIMER ALREADY ACTIVE | USE "END" TO STOP';
+                    }
+                }
+                // Check for END command
+                else if (command === "end" || command.startsWith("end ") || 
+                         command.includes("end") && command.length < 10) {
+                    if (this.running) {
+                        this.stop();
+                        this.voiceStatusDisplay.innerHTML = '✅ COMMAND ACCEPTED: "END" | TIMER TERMINATED';
+                        setTimeout(() => {
+                            if (this.isListening) 
+                                this.voiceStatusDisplay.innerHTML = '🎧 VOICE MODULE: ONLINE | AWAITING COMMANDS';
+                        }, 2500);
+                    } else {
+                        this.voiceStatusDisplay.innerHTML = '⚠️ ERROR: TIMER NOT ACTIVE | USE "START" TO BEGIN';
+                    }
+                }
+                // Check for RESET command
+                else if (command === "reset" || command.startsWith("reset ")) {
+                    this.reset();
+                    this.voiceStatusDisplay.innerHTML = '✅ COMMAND ACCEPTED: "RESET" | SYSTEM RETURNED TO ZERO';
+                    setTimeout(() => {
+                        if (this.isListening) 
+                            this.voiceStatusDisplay.innerHTML = '🎧 VOICE MODULE: ONLINE | AWAITING COMMANDS';
+                    }, 2500);
+                }
+                else {
+                    this.voiceStatusDisplay.innerHTML = `⚠️ UNRECOGNIZED: "${command.toUpperCase()}" | USE: "START", "END", "RESET"`;
+                    setTimeout(() => {
+                        if (this.isListening && this.voiceStatusDisplay.innerHTML.includes("UNRECOGNIZED")) 
+                            this.voiceStatusDisplay.innerHTML = '🎧 VOICE MODULE: ONLINE | AWAITING COMMANDS';
+                    }, 2000);
+                }
+            }
+
+            start() {
+                if (this.running) return;
+                
+                this.startTime = Date.now() - this.elapsedTime;
+                this.running = true;
+                this.timerInterval = setInterval(() => this.updateDisplay(), 10);
+                this.statusDisplay.innerHTML = '<span class="status-led" style="background: #00ff00;"></span> SYSTEM: RUNNING | TIMER ACTIVE';
+                this.statusDisplay.style.borderLeftColor = '#00ff00';
+            }
+
+            stop() {
+                if (!this.running) return;
+                
+                clearInterval(this.timerInterval);
+                this.elapsedTime = Date.now() - this.startTime;
+                this.running = false;
+                this.updateDisplay();
+                this.statusDisplay.innerHTML = '<span class="status-led" style="background: #ff00ff;"></span> SYSTEM: STANDBY | TIMER STOPPED';
+                this.statusDisplay.style.borderLeftColor = '#ff00ff';
+            }
+
+            reset() {
+                if (this.running) {
+                    clearInterval(this.timerInterval);
+                    this.running = false;
+                }
+                
+                this.elapsedTime = 0;
+                this.startTime = 0;
+                this.updateDisplay();
+                this.statusDisplay.innerHTML = '<span class="status-led" style="background: #00ffff;"></span> SYSTEM: RESET | READY FOR COMMAND';
+                this.statusDisplay.style.borderLeftColor = '#00ffff';
+            }
+
+            updateDisplay() {
+                let currentTime = this.elapsedTime;
+                if (this.running) {
+                    currentTime = Date.now() - this.startTime;
+                }
+                
+                const hours = Math.floor(currentTime / 3600000);
+                const minutes = Math.floor((currentTime % 3600000) / 60000);
+                const seconds = Math.floor((currentTime % 60000) / 1000);
+                const milliseconds = Math.floor((currentTime % 1000) / 10);
+                
+                const formatted = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(2, '0')}`;
+                this.stopwatchDisplay.textContent = formatted;
+            }
+
+            toggleVoiceControl() {
+                if (this.isListening) {
+                    this.stopListening();
+                } else {
+                    this.startListening();
+                }
+            }
+
+            startListening() {
+                if (this.recognition) {
+                    try {
+                        this.recognition.start();
+                        this.shouldRestart = true;
+                    } catch (error) {
+                        console.error('Voice activation failed:', error);
+                        this.voiceStatusDisplay.innerHTML = '❌ VOICE MODULE FAILURE | REFRESH AND RETRY';
+                    }
+                }
+            }
+
+            stopListening() {
+                if (this.recognition && this.isListening) {
+                    this.shouldRestart = false;
+                    this.recognition.stop();
+                }
+            }
+        }
+
+        // Initialize the sci-fi stopwatch
+        const stopwatch = new VoiceStopwatch();
+    </script>
+</body>
+</html>
